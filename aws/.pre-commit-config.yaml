@@ -1,0 +1,156 @@
+# Project hooks; pre-commit is the check engine: `make check` runs the commit-stage hooks on every tracked file,
+# `make check-all` both stages. Install the git hooks with `make hooks` after the first commit. No hook needs cloud
+# credentials; pre-push hooks need network once (provider and module downloads) and run offline afterwards.
+# Hook revisions are the newest tags (`make update` moves them); only OpenTofu, Terramate and providers are pinned.
+minimum_pre_commit_version: "4.4.0"
+default_install_hook_types: [pre-commit, pre-push, commit-msg]
+default_stages: [pre-commit, pre-push] # the fast set re-runs at push: catches commits made with --no-verify
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--enforce-all]
+      - id: check-merge-conflict
+        args: [--assume-in-merge]
+      - id: check-yaml
+      - id: end-of-file-fixer
+        exclude: ^\.(agents|claude|kiro)/skills/ # vendored third-party skills keep their bytes
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        exclude: ^\.(agents|claude|kiro)/skills/
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        exclude: ^\.(agents|claude|kiro)/skills/
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks # staged changes only
+      - id: gitleaks
+        alias: gitleaks-history
+        name: gitleaks (all commits)
+        entry: gitleaks git --redact --verbose
+        stages: [pre-push]
+        always_run: true # a push with no surviving files (secret added, then deleted) must still be scanned
+        pass_filenames: false
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  - repo: local
+    hooks:
+      - id: terramate # first of the IaC hooks: every later one must see formatted, freshly generated code
+        name: terramate fmt, generate, list
+        language: unsupported
+        pass_filenames: false
+        files: \.(tf|tm(\.hcl)?)$
+        entry: |
+          bash -c '
+          export CHECKPOINT_DISABLE=1; rc=0
+          terramate fmt --detailed-exit-code || rc=1      # exit 2 = rewrote *.tm.hcl files
+          out=$(terramate generate --detailed-exit-code 2>&1); g=$?; [ -z "$out" ] || printf "%s\n" "$out" >&2
+          [ $g -eq 0 ] || rc=1                            # exit 2 = wrote stale, hand-edited or new generated files
+          [ $g -ne 1 ] || ! grep -q "named .id." <<<"$out" || echo "hint: run \"make generate\" (creates missing stack ids, then regenerates)" >&2
+          err=$(terramate list --run-order 2>&1 >/dev/null) || rc=1 # duplicate stack ids, cycles, failed asserts
+          [ -z "$err" ] || { printf "%s\n" "$err" >&2; rc=1; }      # a typo in after/before is only a warning
+          stacks=$(terramate list) && [ -n "$stacks" ] || { echo "no stacks found" >&2; rc=1; }
+          for s in $stacks; do for f in backend provider versions; do
+            [ -f "$s/_terramate_generated_$f.tf" ] || { echo "$s: _terramate_generated_$f.tf is missing" >&2; rc=1; }
+          done; done
+          exit $rc'
+      - id: generated-versions # provider-agnostic: stays as is in every copy
+        name: generated versions keep the OpenTofu version gate
+        language: pygrep
+        args: [--multiline, --negate]
+        files: (^|/)_terramate_generated_versions\.tf$
+        entry: '(?s)\A(?=.*^language\s*\{\s*compatible_with\s*\{\s*opentofu\s*=\s*"[^"]+")'
+      # AWS attributes: adapt both regexes when copying to azure/ or gcp/
+      - id: generated-backend
+        name: generated backend keeps encryption with the state CMK, locking, account pinning and the stack-id key
+        language: pygrep
+        args: [--multiline, --negate]
+        files: (^|/)_terramate_generated_backend\.tf$
+        entry: '(?s)\A(?=.*^\s*encrypt\s*=\s*true\s*$)(?=.*^\s*use_lockfile\s*=\s*true\s*$)(?=.*^\s*kms_key_id\s*=\s*"arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:alias/(?!aws/))(?=.*^\s*allowed_account_ids\s*=\s*\[\s*"[0-9]{12}")(?=.*^\s*key\s*=\s*"stacks/[0-9a-f-]{36}/tofu\.tfstate")'
+      - id: generated-provider
+        name: generated provider keeps account pinning and default tags
+        language: pygrep
+        args: [--multiline, --negate]
+        files: (^|/)_terramate_generated_provider\.tf$
+        entry: '(?s)\A(?=.*^\s*allowed_account_ids\s*=\s*\[\s*"[0-9]{12}")(?=.*\bdefault_tags\s*\{)'
+      - id: forbidden-files
+        name: no state, plans, provider caches, override files or .tofu files in git
+        language: fail
+        entry: "never commit state, plans, crash logs, .terraform/ or override.tf files (they silently replace the generated backend and provider; the bootstrap's backend_override.tf is gitignored); write .tf (tflint and checkov silently skip .tofu)"
+        files: \.tfstate(\.[^/]*)?$|(^|/)(tfplan|[^/]*\.tfplan)$|(^|/)\.terraform/|(^|/)crash[^/]*\.log$|\.tofu(\.json)?$|\.tofutest\.hcl$|(^|/)([^/]*_)?override\.tf(\.json)?$
+      - id: tofu-test # before terraform_validate: inits each module once, so a cold module validates without a retry
+        name: tofu test (every module, mock providers)
+        language: unsupported
+        pass_filenames: false
+        stages: [pre-push]
+        files: (^|/)modules/.+\.(tf|tftest\.hcl|terraform\.lock\.hcl)$
+        entry: |
+          bash -c '
+          unset "${!AWS_@}" "${!ARM_@}" "${!AZURE_@}" "${!AZD_@}" "${!GOOGLE_@}" "${!GCP_@}" "${!CLOUDSDK_@}" # no cloud credentials
+          export AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_EC2_METADATA_DISABLED=true
+          iso=$(mktemp -d); trap "rm -rf \"$iso\"" EXIT # az and gcloud keep their login sessions in config dirs, not in the environment
+          export AZURE_CONFIG_DIR="$iso" AZD_CONFIG_DIR="$iso" CLOUDSDK_CONFIG="$iso"
+          export TF_PLUGIN_CACHE_DIR=${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}; mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          rc=0
+          for d in modules/*/; do
+            compgen -G "${d}tests/*.tftest.hcl" >/dev/null || { echo "${d}: no tests/*.tftest.hcl" >&2; rc=1; continue; }
+            out=$(cd "$d" && tofu init -backend=false -input=false -lockfile=readonly -no-color >/dev/null && tofu test -no-color 2>&1); r=$?
+            printf "%s\n" "$out"
+            [ $r -eq 0 ] && grep -Eq "^Success! [1-9][0-9]* passed" <<<"$out" && [ ! -e "${d}errored_test.tfstate" ] ||
+              { echo "${d}: tofu test failed, ran no tests or left errored_test.tfstate" >&2; rc=1; }
+          done
+          exit $rc'
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.109.2
+    hooks:
+      - id: terraform_fmt
+        args: [--hook-config=--tf-path=tofu] # pct prefers terraform when both binaries are on PATH
+      - id: terraform_providers_lock
+        args:
+          - --hook-config=--mode=check-lockfile-is-cross-platform # must be the FIRST --hook-config
+          - --hook-config=--tf-path=tofu
+          - --args=-platform=darwin_amd64
+          - --args=-platform=darwin_arm64
+          - --args=-platform=linux_amd64
+          - --args=-platform=linux_arm64
+      - id: terraform_tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl # without it tflint silently runs without the aws ruleset
+      - id: terraform_docs
+        files: (^|/)modules/.+\.tf$ # stacks are compositions: no README per stack
+        args:
+          - --hook-config=--add-to-existing-file=true
+          - --hook-config=--create-file-if-not-exist=true
+          - --args=--lockfile=false # README must not depend on a local .terraform.lock.hcl
+      - id: terraform_validate
+        stages: [pre-push]
+        args:
+          - --hook-config=--tf-path=tofu
+          - --hook-config=--parallelism-limit=1 # a failing init is otherwise retried 10x when TF_PLUGIN_CACHE_DIR is set
+          - --tf-init-args=-lockfile=readonly
+      - id: terraform_trivy
+        args:
+          - --args=--severity=MEDIUM,HIGH,CRITICAL
+          - --args=--skip-dirs=**/.terraform
+          - --args=--tf-exclude-downloaded-modules # registry module internals are pinned, not scanned
+          - --args=--skip-version-check
+          - --args=--disable-telemetry
+      - id: terraform_checkov
+        stages: [pre-push]
+        # CKV_TF_1 asks for commit hashes, which only git sources have; registry modules are pinned to an exact version.
+        args:
+          - --args=--framework=terraform
+          - --args=--skip-download
+          - --args=--quiet
+          - --args=--compact
+          - --args=--skip-check=CKV_TF_1
