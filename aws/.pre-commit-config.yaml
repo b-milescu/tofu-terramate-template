@@ -95,7 +95,7 @@ repos:
         files: (^|/)modules/.+\.(tf|tftest\.hcl|terraform\.lock\.hcl)$
         entry: |
           bash -c '
-          unset "${!AWS_@}" "${!ARM_@}" "${!AZURE_@}" "${!AZD_@}" "${!GOOGLE_@}" "${!GCP_@}" "${!CLOUDSDK_@}" # no cloud credentials
+          unset "${!AWS_@}" "${!ARM_@}" "${!AZURE_@}" "${!AZD_@}" "${!GOOGLE_@}" "${!GCP_@}" "${!CLOUDSDK_@}" "${!VSPHERE_@}" "${!GOVC_@}" "${!TF_HTTP_@}" "${!GITLAB_@}" # no cloud credentials
           export AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_EC2_METADATA_DISABLED=true
           iso=$(mktemp -d); trap "rm -rf \"$iso\"" EXIT # az and gcloud keep their login sessions in config dirs, not in the environment
           export AZURE_CONFIG_DIR="$iso" AZD_CONFIG_DIR="$iso" CLOUDSDK_CONFIG="$iso"

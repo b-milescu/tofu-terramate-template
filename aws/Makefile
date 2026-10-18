@@ -19,7 +19,7 @@ GIT_TLS = env -u GIT_SSL_NO_VERIFY git -c http.sslVerify=true -c http.https://gi
 FORCE_TLS = unset GIT_SSL_NO_VERIFY; n=$${GIT_CONFIG_COUNT:-0}; export GIT_CONFIG_COUNT=$$((n + 2)) "GIT_CONFIG_KEY_$$n=http.sslVerify" "GIT_CONFIG_VALUE_$$n=true" "GIT_CONFIG_KEY_$$((n + 1))=http.https://github.com/.sslVerify" "GIT_CONFIG_VALUE_$$((n + 1))=true";
 
 # The hook environments are built from third-party sources (pip, Go, gcc): no cloud variables and no tokens reach them.
-INSTALL_HOOKS = $(FORCE_TLS) unset "$${!AWS_@}" "$${!ARM_@}" "$${!AZURE_@}" "$${!AZD_@}" "$${!GOOGLE_@}" "$${!GCP_@}" "$${!CLOUDSDK_@}" GITHUB_TOKEN TENV_GITHUB_TOKEN GH_TOKEN HOMEBREW_GITHUB_API_TOKEN; pre-commit install-hooks
+INSTALL_HOOKS = $(FORCE_TLS) unset "$${!AWS_@}" "$${!ARM_@}" "$${!AZURE_@}" "$${!AZD_@}" "$${!GOOGLE_@}" "$${!GCP_@}" "$${!CLOUDSDK_@}" "$${!VSPHERE_@}" "$${!GOVC_@}" "$${!TF_HTTP_@}" "$${!GITLAB_@}" GITHUB_TOKEN TENV_GITHUB_TOKEN GH_TOKEN HOMEBREW_GITHUB_API_TOKEN; pre-commit install-hooks
 
 # Template mode: this folder lies inside a git work tree whose top-level is another directory, so it is the template checkout and not
 # a project (a project is its own git root; outside git nothing changes). There generate, relock, skill and hooks refuse, because they

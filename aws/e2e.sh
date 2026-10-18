@@ -34,7 +34,7 @@ top=$(git -C "$root" rev-parse --show-toplevel 2>/dev/null) || die "run it insid
 for t in docker tofu terramate curl tar; do command -v "$t" >/dev/null || die "$t not found (make setup)"; done
 cache=${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}
 for v in $(compgen -e); do # scrub: no credential, profile, proxy or git setting of yours can leak in
-  case $v in AWS_* | ARM_* | AZURE_* | AZD_* | GOOGLE_* | GCP_* | CLOUDSDK_* | TF_* | GIT_* | *_PROXY | *_proxy | GITHUB_TOKEN | GH_TOKEN | TENV_GITHUB_TOKEN) unset "$v" ;; esac
+  case $v in AWS_* | ARM_* | AZURE_* | AZD_* | GOOGLE_* | GCP_* | CLOUDSDK_* | VSPHERE_* | GOVC_* | GITLAB_* | TF_* | GIT_* | *_PROXY | *_proxy | GITHUB_TOKEN | GH_TOKEN | TENV_GITHUB_TOKEN) unset "$v" ;; esac
 done
 mkdir -p "$cache"
 export TF_PLUGIN_CACHE_DIR=$cache TF_INPUT=0 CHECKPOINT_DISABLE=1 AWS_ACCESS_KEY_ID=000000000000 AWS_SECRET_ACCESS_KEY=floci-fake-secret
