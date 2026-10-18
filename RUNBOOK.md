@@ -92,7 +92,7 @@ v='<explicit version>'; [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || echo "REJECT: no
 
 Then print the final values and the derived ones (the names the README derives, for example state bucket and key alias per account and region), plus these statements, and wait for an explicit yes:
 
-- Steps 3-7 write the project at `$T`. Outside it they write caches of about 3 GB in total, also when every tool is already installed (`~/.cache/{pre-commit,uv,pip,go-build,Homebrew}`, trivy's checks bundle in `~/Library/Caches/trivy` or `~/.cache/trivy`, checkov's update-check answer in `~/Library/Caches/checkov` or `~/.cache/checkov`, `~/.tflint.d`, `~/.terraform.d/plugin-cache`, uv's CPython 3.13) and, only when `make doctor` finds something missing, Homebrew packages, `brew trust` and OpenTofu and Terramate under `~/.tenv`.
+- Steps 3-7 write the project at `$T`. Outside it they write caches of about 3 GB in total, also when every tool is already installed (`~/.cache/{pre-commit,uv,pip,go-build,Homebrew}`, trivy's checks bundle in `~/Library/Caches/trivy` or `~/.cache/trivy`, `~/.tflint.d`, `~/.terraform.d/plugin-cache`, uv's CPython 3.13) and, only when `make doctor` finds something missing, Homebrew packages, `brew trust` and OpenTofu and Terramate under `~/.tenv`.
 - Only OpenTofu, Terramate and the provider version (plus the exact registry-module versions in the code) are pinned. Everything else is installed at its newest release: the Homebrew tools, the hook revisions and the tflint ruleset (`make update`, run once in step 4), the MCP packages (`@latest` in `.mcp.json`, checked on every start) and terraform-skill (`make skill`, step 6).
 - The MCP servers in `.mcp.json` give lookups only (documentation, registry, regions and skills): no cloud API access and no credentials. A server with a `url` is remote: the agent's queries go to that host (the provider README's "Agent tooling" table names each one).
 
@@ -171,7 +171,7 @@ LOG=$(mktemp); cd "${T:?}" && nohup sh -c 'make setup; echo "exit=$?"' > "$LOG" 
 echo "log: $LOG"
 ```
 
-Poll `tail -n 5 <log>` until a line `exit=<code>` appears. `exit=0`: run `cd "${T:?}" && make doctor` again. Anything else: read the log and use the list below.
+Poll `tail -n 5 <log>` until a line `exit=<code>` appears. `exit=0`: done, `make setup` ends with `make doctor`, so the doctor's `ok` lines are at the end of the log. Anything else: read the log and use the list below.
 
 Latest: once `make doctor` is all `ok` (directly or after `make setup`), run `make update` so the project starts at the newest releases of the hook revisions and the tflint ruleset (OpenTofu, Terramate and the providers stay pinned). It rewrites `.pre-commit-config.yaml` (plain tags) and the ruleset version in `.tflint.hcl` (step 7 commits the diff), builds the hook environments of the new revisions with the same scrubbing as `make setup`, and always verifies TLS. Its last output line is `review "git diff", run "make check-all", commit`: step 7 does that, ignore it here. Skipped on a resume that already has a commit (Rule 8). In the background with a log, as above:
 

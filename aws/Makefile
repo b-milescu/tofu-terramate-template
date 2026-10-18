@@ -61,6 +61,9 @@ doctor: ## Check the toolchain against the pins (installs nothing; non-zero exit
 	ge() { [ "$$(printf '%s\n%s\n' "$$1" "$$2" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" = "$$2" ]; }; \
 	has() { command -v "$$1" >/dev/null 2>&1 || { echo "MISSING $$1"; bad=1; return 1; }; }; \
 	chk() { has "$$1" || return 0; v=$$(ver "$$1" --version); if [ -n "$$v" ]; then echo "ok $$1 $$v"; else echo "WRONG $$1 (no version)"; bad=1; fi; }; \
+	pin() { has "$$1" || return 0; want=$$(awk -v k="$$2" '$$1 == k { print $$2 }' .tool-versions); \
+	  v=$$("$$1" version 2>/dev/null) || { echo "MISSING $$1"; bad=1; return 0; }; v=$${v%%$$'\n'*}; v=$${v#OpenTofu v}; \
+	  if [ -z "$$v" ]; then echo "WRONG $$1 (no version)"; bad=1; elif [ "$$v" = "$$want" ]; then echo "ok $$1 $$v"; else echo "WRONG $$1 $$v want $$want"; bad=1; fi; }; \
 	chk git; \
 	if has pre-commit; then \
 	  v=$$(ver pre-commit --version); \
@@ -72,22 +75,7 @@ doctor: ## Check the toolchain against the pins (installs nothing; non-zero exit
 	  else echo "ok pre-commit $$v"; echo "WRONG .pre-commit-config.yaml is invalid (validate-config exit $$rc):"; sed -e '/^$$/d' -e 's/^/  /' <<<"$$err"; bad=1; fi; \
 	fi; \
 	chk tenv; \
-	if has tofu; then \
-	  want=$$(awk '$$1 == "opentofu" { print $$2 }' .tool-versions); \
-	  out=$$(tofu version 2>/dev/null); rc=$$?; v=$$(sed -n 's/^OpenTofu v//p' <<<"$$out" | head -1); \
-	  if [ $$rc -ne 0 ]; then echo "MISSING tofu"; bad=1; \
-	  elif [ -z "$$v" ]; then echo "WRONG tofu (no version)"; bad=1; \
-	  elif [ "$$v" = "$$want" ]; then echo "ok tofu $$v"; \
-	  else echo "WRONG tofu $$v want $$want"; bad=1; fi; \
-	fi; \
-	if has terramate; then \
-	  want=$$(awk '$$1 == "terramate" { print $$2 }' .tool-versions); \
-	  v=$$(terramate version 2>/dev/null); rc=$$?; \
-	  if [ $$rc -ne 0 ]; then echo "MISSING terramate"; bad=1; \
-	  elif [ -z "$$v" ]; then echo "WRONG terramate (no version)"; bad=1; \
-	  elif [ "$$v" = "$$want" ]; then echo "ok terramate $$v"; \
-	  else echo "WRONG terramate $$v want $$want"; bad=1; fi; \
-	fi; \
+	pin tofu opentofu; pin terramate terramate; \
 	if has tflint; then \
 	  v=$$(ver tflint --version); req=$$(sed -n 's/^ *required_version *= *">= *\([0-9.]*\)".*/\1/p' .tflint.hcl | head -1); \
 	  if [ -z "$$v" ]; then echo "WRONG tflint (no version)"; bad=1; \
@@ -167,8 +155,9 @@ _tracked:
 check: _tracked ## Commit-stage hooks on every tracked file
 	@$(THROWAWAY); $(CACHE) pre-commit run --all-files
 
+# One run: the pre-push stage holds every commit-stage hook too (default_stages in .pre-commit-config.yaml).
 check-all: _tracked ## Commit- and push-stage hooks on every tracked file
-	@$(THROWAWAY); $(CACHE) pre-commit run --all-files && pre-commit run --all-files --hook-stage pre-push
+	@$(THROWAWAY); $(CACHE) pre-commit run --all-files --hook-stage pre-push
 
 test: _tracked ## tofu test of every module (mock providers, no credentials)
 	@$(THROWAWAY); $(CACHE) pre-commit run tofu-test --all-files --hook-stage pre-push

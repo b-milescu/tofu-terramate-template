@@ -48,7 +48,7 @@ repos:
         name: terramate fmt, generate, list
         language: unsupported
         pass_filenames: false
-        files: \.(tf|tm(\.hcl)?)$
+        files: \.tm(\.hcl)?$|(^|/)_terramate_generated_[^/]+\.tf$ # generation reads only Terramate config and stack metadata
         entry: |
           bash -c '
           export CHECKPOINT_DISABLE=1; rc=0
@@ -114,6 +114,7 @@ repos:
     rev: v1.109.2
     hooks:
       - id: terraform_fmt
+        require_serial: true # pct dedups directories itself; parallel pre-commit batches would run tofu fmt on one directory twice
         args: [--hook-config=--tf-path=tofu] # pct prefers terraform when both binaries are on PATH
       - id: terraform_providers_lock
         args:
@@ -149,6 +150,7 @@ repos:
         stages: [pre-push]
         # CKV_TF_1 asks for commit hashes, which only git sources have; registry modules are pinned to an exact version.
         args:
+          - --env-vars=CKV_SKIP_PACKAGE_UPDATE_CHECK=true # no pypi.org lookup; --quiet hides its result anyway
           - --args=--framework=terraform
           - --args=--skip-download
           - --args=--quiet

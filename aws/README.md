@@ -22,8 +22,8 @@ e2e.sh                  optional floci rehearsal (`make e2e`)
 AGENTS.md  README.md     rules for coding agents; this file
 modules/state-backend/   S3 bucket and KMS key; tests/ (mock provider); README.md filled by terraform-docs
 stacks/
-  dev/                   globals.tm.hcl: account_name, account_id
-    eu-central-1/        globals.tm.hcl: region
+  dev/                   globals.tm.hcl: account_id (the folder name is account_name)
+    eu-central-1/        the folder name is region
       state-backend/     stack.tm.hcl (tag state-backend) + generated files
       network/           stack.tm.hcl, main.tf, outputs.tf + generated files
   prod/                  same shape; protect_destroy = true adds the destroy guard
@@ -35,9 +35,8 @@ Globals per level; lower levels add to or override higher ones:
 
 | Level | File | Globals |
 |---|---|---|
-| project | [`globals.tm.hcl`](globals.tm.hcl) | `project`, `opentofu_version`, `aws_provider_version`, `state_bucket`, `state_kms_alias`, `protect_destroy`, `default_tags` (`ManagedBy`, `Project` = `project`, and `Environment` = the account's `account_name`); values are in the file |
-| account | `stacks/<account>/globals.tm.hcl` | `account_name`, `account_id` (12 digits, asserted in `generate.tm.hcl`); protected accounts also `protect_destroy = true` |
-| region | `stacks/<account>/<region>/globals.tm.hcl` | `region` |
+| project | [`globals.tm.hcl`](globals.tm.hcl) | `project`, `opentofu_version`, `aws_provider_version`, `account_name` and `region` (the folder names of `stacks/<account>/<region>/`), `state_bucket`, `state_kms_alias`, `protect_destroy`, `default_tags` (`ManagedBy`, `Project` = `project`, and `Environment` = `account_name`); values are in the file |
+| account | `stacks/<account>/globals.tm.hcl` | `account_id` (12 digits, asserted in `generate.tm.hcl`); protected accounts also `protect_destroy = true` |
 | stack | `stack.tm.hcl` | `stack {}`: `name`, `description`, `tags`, `after`, `id` |
 
 `generate.tm.hcl` writes these files into every stack below it. They are committed and never edited by hand: change `generate.tm.hcl` or a globals file, run `make generate` and commit the result (the `terramate` hook runs `terramate generate` with `--detailed-exit-code` and fails when it had to write files). The `id` of a stack is assigned by `make generate` and is the state key.
@@ -104,9 +103,9 @@ The wizard of the template's RUNBOOK.md (a checkout of the template; its commit 
 | Parameter | Default | Rule | How to change (project-root paths) |
 |---|---|---|---|
 | project | basename of the target directory, lowercased, every run of other characters → `-`, trimmed; if the result breaks the rule: ask | `^[a-z][a-z0-9-]*[a-z0-9]$`; not starting `xn--`, `sthree-`, `amzn-s3-demo-`; `len(project) + 22 + len(region) <= 63` (all asserted by generate.tm.hcl); unique among your projects in the same AWS account and region (bucket and key alias collide otherwise) | `project` in `globals.tm.hcl`, then `make generate` |
-| accounts | `dev` (`111111111111`), `prod` (`222222222222`) — placeholders: `allowed_account_ids` makes init refuse them until replaced | name `^[a-z][a-z0-9-]{0,19}$`, unique; id `^[0-9]{12}$` (asserted), distinct | per account `stacks/<name>/globals.tm.hcl` (`account_name`, `account_id`). Rename: `mv stacks/<old> stacks/<new>` AND `account_name`; add: copy `stacks/<existing>` to `stacks/<new>` (once `make generate` has run, delete the copied `id = ...` lines in its `stack.tm.hcl` files, recipe in [Grow the tree](#grow-the-tree)), set its values, give it a new `vpc_cidr`, `make generate`; remove: delete `stacks/<name>` |
+| accounts | `dev` (`111111111111`), `prod` (`222222222222`) — placeholders: `allowed_account_ids` makes init refuse them until replaced | name `^[a-z][a-z0-9-]{0,19}$`, unique; id `^[0-9]{12}$` (asserted), distinct | per account `stacks/<name>/globals.tm.hcl` (`account_id`; the folder name is the account name). Rename: `mv stacks/<old> stacks/<new>`; add: copy `stacks/<existing>` to `stacks/<new>` (once `make generate` has run, delete the copied `id = ...` lines in its `stack.tm.hcl` files, recipe in [Grow the tree](#grow-the-tree)), set its `account_id`, give it a new `vpc_cidr`, `make generate`; remove: delete `stacks/<name>` |
 | protect_destroy | `true` for accounts whose name starts with `prod`, else absent | boolean | `protect_destroy = true` in `stacks/<name>/globals.tm.hcl` |
-| region | `eu-central-1` (all accounts) | `^[a-z]{2}-[a-z]+-[0-9]+$`; standard partition only (not `cn-*`, `us-gov-*`, `us-iso*`) | per account `mv stacks/<acct>/eu-central-1 stacks/<acct>/<region>`, `region` in its `globals.tm.hcl`, every `eu-central-1` in its `network/main.tf` |
+| region | `eu-central-1` (all accounts) | `^[a-z]{2}-[a-z]+-[0-9]+$`; standard partition only (not `cn-*`, `us-gov-*`, `us-iso*`; asserted by generate.tm.hcl) | per account `mv stacks/<acct>/eu-central-1 stacks/<acct>/<region>` (the folder name is the region), every `eu-central-1` in its `network/main.tf` |
 | availability zones | `<region>a`, `<region>b`, `<region>c` | 2 or 3 distinct names matching `^<region>[a-z]$` that exist in the account; no offline check can tell (only apply fails). Ask the user for the names when the region is `us-west-1` (two zones per account), `ca-central-1` or `ap-northeast-1`; always tell the user to confirm with `aws ec2 describe-availability-zones --region <region>` (their credentials) before the first plan | `azs` in each `network/main.tf` |
 | VPC CIDR | `10.10.0.0/16` (dev), `10.20.0.0/16` (prod), then `10.30.0.0/16`, ... | `^10\.[0-9]{1,3}\.0\.0/16$`, distinct | `vpc_cidr` in each `network/main.tf` |
 | AWS provider | keep the locked 6.69.1 (verified) | `keep` or `latest` (newest 6.x: `curl -fsS https://registry.opentofu.org/v1/providers/hashicorp/aws/versions`); the constraint `>= 6.0, < 7.0` stays | `latest`: `make relock` after `make generate` |
@@ -126,7 +125,7 @@ Placeholder values the RUNBOOK leftover scan looks for: `example`, `111111111111
 | `gitleaks` | gitleaks | both | secrets in the staged changes (blind under `--all-files`) |
 | `gitleaks-history` | gitleaks | pre-push | secrets in every commit (`gitleaks git --redact --verbose`), runs even when no file survives |
 | `conventional-pre-commit` | conventional-pre-commit | commit-msg | Conventional Commits message |
-| `terramate` | local | both | `terramate fmt`, `generate`, `list --run-order`: fails on rewritten `.tm.hcl`, stale or hand-edited generated files, duplicate stack ids, `after` cycles or typos, failed asserts (project name, account id, bucket name length), a stack without `_terramate_generated_{backend,provider,versions}.tf`; prints `hint: run "make generate"` when a stack has no id |
+| `terramate` | local | both | `terramate fmt`, `generate`, `list --run-order`: fails on rewritten `.tm.hcl`, stale or hand-edited generated files, duplicate stack ids, `after` cycles or typos, failed asserts (project name, account id, region, bucket name length), a stack without `_terramate_generated_{backend,provider,versions}.tf`; prints `hint: run "make generate"` when a stack has no id |
 | `generated-versions` | local (pygrep) | both | generated versions still has the top-level `language { compatible_with { opentofu = ... } }` gate (OpenTofu ignores `required_version` in `.tf` files) |
 | `generated-backend` | local (pygrep) | both | generated backend still has, line-anchored, `encrypt = true`, `use_lockfile = true`, a `kms_key_id` alias ARN that is not `alias/aws/...`, `allowed_account_ids` with a 12-digit id and `key = "stacks/<uuid>/tofu.tfstate"` |
 | `generated-provider` | local (pygrep) | both | generated provider still has `allowed_account_ids` (line-anchored, 12-digit id) and `default_tags {` |
@@ -137,12 +136,12 @@ Placeholder values the RUNBOOK leftover scan looks for: `example`, `111111111111
 | `terraform_tflint` | pre-commit-terraform | both | tflint with preset `all`, the AWS ruleset, exact registry-module versions and the secret rules `aws_write_only_arguments` and `aws_ephemeral_resources` |
 | `terraform_docs` | pre-commit-terraform | both | regenerates `modules/*/README.md` between the `BEGIN_TF_DOCS` and `END_TF_DOCS` markers |
 | `terraform_validate` | pre-commit-terraform | pre-push | `tofu validate`, serially, in every directory under `make check-all` and in the directories of changed files on a push; a directory without `.terraform` first gets `tofu init -backend=false -lockfile=readonly`, so the stacks' S3 backend is never contacted (it exports no `TF_PLUGIN_CACHE_DIR`: see [Prerequisites](#prerequisites)) |
-| `terraform_trivy` | pre-commit-terraform | both | `trivy config`, MEDIUM and above, `.terraform` and downloaded registry-module internals excluded: once at the project root under `make check` and `check-all`, per directory of changed files on a commit or push; the checks bundle is downloaded once a day ([Not covered](#not-covered)) |
+| `terraform_trivy` | pre-commit-terraform | both | `trivy config`, MEDIUM and above, `.terraform` and downloaded registry-module internals excluded: once at the project root under `make check` and `check-all`, per directory of changed files on a commit or push |
 | `terraform_checkov` | pre-commit-terraform | pre-push | the Homebrew checkov, terraform framework, `--skip-download`: once at the project root under `check-all`, inside each directory of changed files on a push; `CKV_TF_1` is skipped in the hook, every other skip is an inline `#checkov:skip` with a reason (`grep -rn checkov:skip .`) |
 
 - A hook that rewrites files (`end-of-file-fixer`, `terraform_fmt`, `terraform_docs`, `terramate`) fails the run: review the change, `git add` it, run again. `terramate fmt` formats `*.tm.hcl` files up front: run it after editing one by hand.
 - `trivy` and `checkov` are system tools: they must be on the `PATH` of whatever runs git (no hook environment builds them; a GUI git client or a minimal CI image often lacks Homebrew's `bin`). Missing: `checkov: command not found` (exit 127) or `'trivy' is required by 'terraform_trivy' pre-commit hook but it is not discoverable in the system's PATH`. `make doctor` finds both.
-- Network use of the pre-commit-terraform hooks: trivy fetches its checks bundle from `mirror.gcr.io` at most once a day; checkov asks pypi.org for a newer release at most once an hour (the answer is cached in `~/Library/Caches/checkov` on macOS, `~/.cache/checkov` on Linux), and `CKV_SKIP_PACKAGE_UPDATE_CHECK=true` in your environment stops that; `tofu validate` makes no request. Trivy and checkov both still run offline (trivy with its embedded checks).
+- Network use of the pre-commit-terraform hooks: trivy fetches its checks bundle from `mirror.gcr.io` at most once a day and still runs offline, with its embedded checks ([Not covered](#not-covered)); checkov (the hook sets `CKV_SKIP_PACKAGE_UPDATE_CHECK=true`) and `tofu validate` make no request.
 - Only `tofu-test` unsets every `AWS_*`, `ARM_*`, `AZURE_*`, `AZD_*`, `GOOGLE_*`, `GCP_*` and `CLOUDSDK_*` variable and points the az, azd and gcloud config dirs at an empty temp dir, so cached cloud logins cannot be used either. The pre-commit-terraform hooks run with your environment: `tofu init` and `tofu validate` start the provider binary with your variables (validate does not configure the provider, and made no request in a test with fake credentials), trivy and checkov only read files.
 
 ### Disabled tools
@@ -162,7 +161,7 @@ Placeholder values the RUNBOOK leftover scan looks for: `example`, `111111111111
 
 ## CI contract
 
-No pipeline file ships (the forge is undecided). After `make setup` (the runner needs `trivy` and `checkov` on its `PATH`), a pipeline gates on exactly this, with `SKIP` unset, a full clone (history scan), `GITHUB_TOKEN` exported for `tflint --init`, and network for the first downloads (afterwards trivy re-checks its checks bundle once a day and checkov asks pypi.org once an hour; both run offline):
+No pipeline file ships (the forge is undecided). After `make setup` (the runner needs `trivy` and `checkov` on its `PATH`), a pipeline gates on exactly this, with `SKIP` unset, a full clone (history scan), `GITHUB_TOKEN` exported for `tflint --init`, and network for the first downloads (later runs work offline: [Checks](#checks)):
 
 ```bash
 make check-all
@@ -170,7 +169,7 @@ git diff --exit-code
 test -z "$(git status --porcelain)"
 ```
 
-- The two stages are separate runs inside `check-all`: the first does not execute pre-push hooks, and `gitleaks` only sees staged changes, so the history scan lives in the pre-push run.
+- `check-all` is one run of the pre-push stage, which holds every commit-stage hook too (`default_stages`). A bare `pre-commit run --all-files` would skip the push-only hooks, `gitleaks-history` among them (`gitleaks` only sees staged changes).
 - The last two commands catch rewrites and new untracked files (READMEs, lock files) that a hook can create while still reporting success.
 - This is the only authoritative gate. `--no-verify`, `SKIP` and a missing `make hooks` bypass the local hooks, and deletion-only commits skip every file-based hook (only `gitleaks-history` always runs).
 - Plan and apply need credentials and are out of scope for the template; the runbook is under [Operate](#operate).
@@ -311,8 +310,8 @@ Run on macOS with Docker Desktop only: not on Linux or WSL2. A new floci image c
 | Add | How |
 |---|---|
 | stack | `terramate create`, then write `main.tf` |
-| region | copy `stacks/<account>/<region>`, set `region`, edit `network/main.tf`, bootstrap its `state-backend` |
-| account | copy `stacks/<account>`, set `account_name` and `account_id` (and `protect_destroy = true` if protected), bootstrap each region |
+| region | copy `stacks/<account>/<region>` to `stacks/<account>/<new region>` (the folder name is the region), edit `network/main.tf`, bootstrap its `state-backend` |
+| account | copy `stacks/<account>` to `stacks/<new account>` (the folder name is the account name), set `account_id` (and `protect_destroy = true` if protected), bootstrap each region |
 
 New stack:
 
@@ -330,7 +329,7 @@ New region or account, by copying:
 cp -R stacks/<existing> stacks/<new>      # a region instead: stacks/<account>/<existing> and stacks/<account>/<new>, in every line
 find stacks/<new> -name .terraform -type d -prune -exec rm -rf {} +
 find stacks/<new> -name stack.tm.hcl -exec sed -i.bak '/^[[:space:]]*id[[:space:]]*=/d' {} + && find stacks/<new> -name '*.bak' -delete
-$EDITOR stacks/<new>/globals.tm.hcl       # account_name, account_id (a region: region in its globals.tm.hcl)
+$EDITOR stacks/<new>/globals.tm.hcl       # an account: account_id (a region needs no edit: the folder name is the region)
 make generate                             # new ids = new state keys (copied ids fail with "duplicated ID"), then writes the new backend files; commit them
 ```
 
@@ -338,7 +337,7 @@ The lock files are copied along and stay valid (same providers). Commit, then bo
 
 - Edit `vpc_cidr` and `azs` in each copied `network/main.tf`: the copy keeps the source's range and zones. Zone letters differ per region and account (us-west-1 has no `b`), so list the zones that exist: `aws ec2 describe-availability-zones --region <region> --filters Name=zone-type,Values=availability-zone --query 'AvailabilityZones[].ZoneName'`.
 - State keys are stack ids, so a moved stack keeps its state only within the same account and region: the bucket comes from `account_id` and `region`.
-- Inserting a level (for example `<env>/`) changes `../../../../modules` in `generate.tm.hcl` and in any hand-written stack that calls a local module.
+- `account_name` and `region` are the first two folder names under `stacks/` (`globals.tm.hcl`): add a new level (for example `<env>/`) below `<region>/`, and adjust the relative `source` of any hand-written stack that calls a local module.
 
 ## Upgrades
 
@@ -452,7 +451,7 @@ Residual risk:
 - Real AWS: the S3 backend's acceptance of the KMS alias ARN, `use_lockfile` semantics, IAM and key policies as AWS evaluates them, and applying the `network` stack were never exercised. `make e2e` runs Bootstrap, state migration, plan and apply (the `network` stack included) and the destroy guard against the floci emulator with these files: it shows that OpenTofu, the provider and Terramate accept the generated blocks, not that AWS does. Client-side encryption was rehearsed against an emulator (moto) in the design phase only, not with these files.
 - Registry-module internals and inputs are not scanned (`terraform_trivy` runs with `--tf-exclude-downloaded-modules`; checkov does not read downloaded modules): the exact version pin is the control.
 - `terraform_trivy` scans with the checks bundle it downloads from `mirror.gcr.io` (a few megabytes, re-checked once the cache is a day old, kept in trivy's cache: `~/Library/Caches/trivy` on macOS, `~/.cache/trivy` on Linux). When the download or the re-check fails it logs `Falling back to embedded checks` (hidden by pre-commit while the hook passes; a cache older than a day is not used then either), scans with the checks built into the installed trivy and still exits 0: the same tree can pass in one environment and fail in another once a new check ships. Two known causes: no network, and a `credsStore` in `~/.docker/config.json` (Docker Desktop) whose helper (`docker-credential-desktop`) is not on `PATH`, as in a trimmed agent environment (`error getting credentials`). `trivy conf . --debug` shows which one applies.
-- Only `tofu-test` scrubs the environment. `terraform_validate` runs `tofu init` and `tofu validate` with your variables, so the provider binary starts with them; `validate` does not configure the provider and made no network request in a test with fake credentials, but nothing enforces that.
+- Only `tofu-test` scrubs the environment ([Checks](#checks)); nothing enforces that `tofu validate`, which starts the provider binary with your variables, stays offline.
 - Mocks prove module logic, not provider behaviour: `tofu test` runs plan-only against `mock_provider`.
 - `prevent_destroy` and other lifecycle arguments are invisible to tests: review the module diff.
 - `validate` and `test` never read backend or encryption blocks (`init -backend=false`): the `generated-*` greps cover the generated text. After changing a backend generator, run `tofu init -input=false` in one stack without credentials. It must fail only with credential errors: `No valid credential sources found`, `failed to refresh cached credentials`, then `Retrieving AWS account details` (it may say `Missing Region`) and `Invalid account ID`, both caused by the missing credentials. A schema problem is reported before those, as `Unsupported argument`, `Incorrect attribute value type` or `Invalid KMS Key ID`. A real `tofu init` is the only full check.
@@ -462,7 +461,7 @@ Residual risk:
 - Local hooks can be bypassed; see the CI contract.
 - gitleaks knows token formats, not passwords: it does not flag a password embedded in a URL (`https://user:password@host`).
 - Taken at their newest release when installed or updated: the hooks, the tflint ruleset, terraform-skill and the Homebrew tools. A new upstream version can change what a check or your agent does without any change in this repository: review the `make update` and `make skill` diff before committing. The MCP side changes without a diff to review: `aws-documentation` updates on every start, and `aws-knowledge` is a third-party hosted service (rate-limited, needs the network, tools and skills can change at any time).
-- Supply chain: pre-commit downloads a Go toolchain for gitleaks without hashes; checkov and trivy come from Homebrew, Terramate is verified by checksum only; MCP servers and hook environments run with your shell's environment (only the `terraform` entry removes credential variables, see [Agent tooling](#agent-tooling)). `make setup` and `make update` build the hook environments with the cloud variables and the GitHub tokens unset; the hooks themselves run with your environment, except `tofu-test`, which scrubs it.
+- Supply chain: pre-commit downloads a Go toolchain for gitleaks without hashes; checkov and trivy come from Homebrew, Terramate is verified by checksum only; MCP servers and hook environments run with your shell's environment (only the `terraform` entry removes credential variables, see [Agent tooling](#agent-tooling)). `make setup` and `make update` build the hook environments with the cloud variables and the GitHub tokens unset.
 - `make setup`, `make update` and `make skill` force TLS verification for their git fetches, whatever your git config says. A path-scoped override (`http.https://github.com/<owner>/.sslVerify=false`) is more specific and wins; git older than 2.31 ignores the mechanism for pre-commit's own git calls (direct git calls are unaffected); a TLS-intercepting network makes the three fail.
 - Verified on macOS (arm64) and, from `make setup` through both hook stages, in an Ubuntu 24.04 arm64 container; x86_64 Linux and WSL2 were not run.
 

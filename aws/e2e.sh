@@ -110,7 +110,7 @@ for d in stacks/*/; do
   first=${sbs%%$'\n'*}
   AWS_ACCESS_KEY_ID=$(grep -Eo 'arn:aws:kms:[a-z0-9-]+:[0-9]{12}' "$first/_terramate_generated_backend.tf" | grep -Eo '[0-9]{12}')
   echo "== account $a ($AWS_ACCESS_KEY_ID)"
-  work=$(terramate list | grep "^stacks/$a/" | grep -vxF "$sbs" || true)
+  work=$(terramate list --no-tags state-backend | grep "^stacks/$a/" || true)
   for sb in $sbs; do boot "$sb"; done
   if [ -n "$work" ]; then
     step "$a init" - tm -- tofu init
@@ -124,7 +124,7 @@ for d in stacks/*/; do
   fi
   AWS_ACCESS_KEY_ID=$OTHER step "$a the backend refuses another account" "Invalid account ID" at "$first" tofu plan -no-color
   lock "$first"
-  if grep -rqs --include='*.tm.hcl' 'protect_destroy *= *true' "stacks/$a"; then
+  if [ -f "$first/_terramate_generated_destroy_guard.tf" ]; then # protect_destroy is set for this account
     step "$a destroy is blocked by the guard" "Resource instance terraform_data.destroy_guard has prevent_destroy" tm --reverse -- tofu plan -destroy -no-color -out=tfplan
   elif [ -n "$work" ]; then
     step "$a destroy plan" - tm --reverse -- tofu plan -destroy -out=tfplan

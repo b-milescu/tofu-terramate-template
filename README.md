@@ -22,21 +22,11 @@ Smoke test: both check stages on the provider folder. It needs the toolchain (`m
 cd aws && make check-all
 ```
 
-Inside this repository `aws/` is a template, not a project (Terramate takes the git root as the project root, and the folder ships without stack ids), so `check`, `check-all`, `test` and `e2e` run in a throwaway project: a copy of the folder's tracked and unignored files in a scratch git repository, `make generate`, then the target. Uncommitted edits are tested, and what the hooks did in the copy comes back to the checkout: the fixes of a failing run (review `git diff`, rerun) and the files a hook created in a passing run, such as a missing module README (untracked: `git status`). Stack ids, generated files and lock files never come back (aws/README.md, "Make targets", lists the messages). `generate`, `relock`, `skill` and `hooks` refuse here: they would write stack ids, generated files, lock files, a skill copy or git hooks into the template.
+Inside this repository `aws/` is a template, not a project (Terramate takes the git root as the project root, and the folder ships without stack ids): `check`, `check-all`, `test` and `e2e` run in a throwaway copy of the folder's tracked and unignored files, uncommitted edits included, and bring the hooks' fixes back; `generate`, `relock`, `skill` and `hooks` refuse (aws/README.md, "Make targets", lists what comes back and the messages).
 
 Second smoke test, optional (Docker, about 3.5 minutes): `cd aws && make e2e` replays Bootstrap, Operate and Destroy against a local emulator and never touches AWS (aws/README.md, "End-to-end rehearsal"). Run it when generators, the state-backend module or the version pins change, or to try a newer floci image.
 
-| Policy | What | Where (`<p>` = provider folder) |
-|---|---|---|
-| Pinned | OpenTofu, Terramate | `<p>/.tool-versions`, and `required_version` in `<p>/terramate.tm.hcl` |
-| Pinned | providers | the provider version in `<p>/globals.tm.hcl`, module `versions.tf`, the committed lock files |
-| Pinned | registry modules the stacks call | the exact `version` in each stack's `main.tf` |
-| Latest | hook revisions, tflint ruleset | `make update` in a project (the RUNBOOK runs it once, step 4); `<p>/.pre-commit-config.yaml` and `<p>/.tflint.hcl` carry what the last update wrote |
-| Latest | MCP packages | `@latest` in `<p>/.mcp.json`: uvx checks for a newer release on every start |
-| Latest | terraform-skill | `make skill` (install and update) |
-| Latest | Homebrew tools | newest at install (`<p>/Brewfile`) |
-
-Only what the development code is based on is pinned. A project runs `make update` when it is created. The template's own copies go stale until a maintainer refreshes them: `cd aws && make update` (it runs in place and rewrites `.pre-commit-config.yaml` and `.tflint.hcl`), review `git diff`, rerun the smoke test.
+Only what the development code is based on is pinned: OpenTofu, Terramate, the providers and the registry modules the stacks call. Everything else is taken at its newest release: the hook revisions and the tflint ruleset (`make update`), the MCP packages (`@latest` in `.mcp.json`), terraform-skill (`make skill`) and the Homebrew tools. Each provider README's "Upgrades" table says where each one lives and how to move it ([aws](aws/README.md#upgrades)). A project runs `make update` when it is created. The template's own copies go stale until a maintainer refreshes them: `cd aws && make update` (it runs in place and rewrites `.pre-commit-config.yaml` and `.tflint.hcl`), review `git diff`, rerun the smoke test.
 
 ## Add a provider
 
@@ -56,9 +46,9 @@ d=$(mktemp -d) && cp -R azure/. "$d" && (cd "$d" && git init -q -b main && make 
 | `.tool-versions`, `.gitignore`, `.gitattributes`, `.editorconfig`, `terramate.tm.hcl`, `Makefile` | as shipped | identical, except that the `e2e` target calls `./e2e.sh` (below) | same |
 | `.pre-commit-config.yaml` | as shipped | identical except the `entry:` regexes of `generated-backend` and `generated-provider` (they name AWS attributes) | same |
 | `.tflint.hcl` | `plugin "aws"` | `plugin "azurerm"` | `plugin "google"` |
-| `globals.tm.hcl` | `project`, `aws_provider_version`, `state_bucket`, `state_kms_alias`, `protect_destroy` | provider version; storage account, container and resource group names for the backend | provider version; state bucket name |
-| `generate.tm.hcl` | asserts on project name, 12-digit account id and bucket name length; `s3` backend; `provider "aws"`; `required_providers`; state-backend module call | assert on the subscription id; `azurerm` backend; `provider "azurerm"` (`features {}`, `subscription_id`); `required_providers` | assert on the project id; `gcs` backend (`bucket`, `prefix`); `provider "google"` (`project`, `region`); `required_providers` |
-| `stacks/**/globals.tm.hcl` | `account_id` is the AWS account, `region` | keep the names: `account_id` is the subscription id | keep the names: `account_id` is the project id |
+| `globals.tm.hcl` | `project`, `aws_provider_version`, `account_name` and `region` (folder names under `stacks/`), `state_bucket`, `state_kms_alias`, `protect_destroy` | provider version; storage account, container and resource group names for the backend | provider version; state bucket name |
+| `generate.tm.hcl` | asserts on project name, 12-digit account id, region and bucket name length; `s3` backend; `provider "aws"`; `required_providers`; state-backend module call | assert on the subscription id; `azurerm` backend; `provider "azurerm"` (`features {}`, `subscription_id`); `required_providers` | assert on the project id; `gcs` backend (`bucket`, `prefix`); `provider "google"` (`project`, `region`); `required_providers` |
+| `stacks/*/globals.tm.hcl` | `account_id` is the AWS account | keep the name: `account_id` is the subscription id | keep the name: `account_id` is the project id |
 | `modules/` | `state-backend` (S3 and KMS) | storage account and container module, with tests | bucket module, with tests |
 | stack `main.tf` | VPC | the provider's resources | the provider's resources |
 | `Brewfile` | `uv`, `terraform-mcp-server` | `terraform-mcp-server`; `uv` only while a `uvx` server is configured (`make doctor` checks `uvx`) | same as azure |

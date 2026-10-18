@@ -7,6 +7,11 @@ assert {
 }
 
 assert {
+  assertion = tm_can(tm_regex("^[a-z]{2}-[a-z]+-[0-9]+$", global.region)) && !tm_can(tm_regex("^cn-", global.region))
+  message   = "region (the folder name in stacks/<account>/<region>/) must be a standard-partition AWS region such as eu-central-1, not cn-*, us-gov-* or us-iso*"
+}
+
+assert {
   assertion = tm_can(tm_regex("^[a-z][a-z0-9-]*[a-z0-9]$", global.project)) && !tm_can(tm_regex("^(xn--|sthree-|amzn-s3-demo-)", global.project))
   message   = "project must use lowercase letters, digits and hyphens, start with a letter, end with a letter or digit, and not start with xn--, sthree- or amzn-s3-demo-"
 }
@@ -72,7 +77,7 @@ generate_hcl "_terramate_generated_state_backend.tf" {
 
   content {
     module "state_backend" {
-      source = "../../../../modules/state-backend"
+      source = "${terramate.stack.path.to_root}/modules/state-backend"
 
       bucket_name    = global.state_bucket
       kms_alias_name = global.state_kms_alias
