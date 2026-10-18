@@ -284,7 +284,7 @@ Knobs, all optional environment variables:
 | `E2E_IMAGE` | `floci/floci:latest` | pin a tag or digest (for example `floci/floci:2.3.0`) when a new image regresses; 2.3.0 is what it ran against |
 | `E2E_VERBOSE` | unset | `1` streams the output of every step live (a full run is about 4700 lines); any other value: only a failing step shows its last 30 lines |
 
-Run on macOS with Docker Desktop only: not on Linux or WSL2. A new floci image can change the result (`latest` is not pinned).
+Run on macOS with Docker Desktop only. A new floci image can change the result (`latest` is not pinned).
 
 ## Grow the tree
 
