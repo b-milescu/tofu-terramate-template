@@ -7,27 +7,25 @@
 # host (proven by a curl first and a tofu drill during the run), and no Docker socket for floci.
 set -euo pipefail
 IMAGE=${E2E_IMAGE:-floci/floci:latest}
-HOST=${E2E_ENDPOINT_HOST:-localhost} # the provider calls S3 Control at <account id>.$HOST; glibc Linux needs localhost.floci.io
-DRIFT=${E2E_KNOWN_DRIFT:-"module.vpc.aws_default_network_acl.this[0] module.vpc.aws_flow_log.this[0]"} # floci #5720, #5729
+DRIFT="module.vpc.aws_default_network_acl.this[0] module.vpc.aws_flow_log.this[0]" # floci #5720, #5729: delete them when those issues close
 V=${E2E_VERBOSE:-} # 1: also stream every step's output live (it is logged either way); any other value: off
 OTHER=999999999999
 
 die() { echo "e2e: $*" >&2; exit 1; }
 # step <label> <-|+needle|needle> <cmd...>: "-" must succeed, "+x" must succeed and print x, "x" must fail and print x.
-# The label prints when the step starts, so a minute-long apply is not silent; on a terminal the ok line then replaces it (the
-# start line is cut to 70 columns so it cannot wrap). With E2E_VERBOSE=1 the output streams live too (tee into the same log);
-# tofu and curl may end it without a newline, so the ok line starts a fresh line. $pre is set while the cursor is mid-line.
+# The label prints when the step starts, so a minute-long apply is not silent. With E2E_VERBOSE=1 the output also streams live (tee
+# into the same log); tofu and curl may end it without a newline, so one is added before the ok line.
 step() {
-  local l=$1 n=$2 rc=0 pre=
+  local l=$1 n=$2 rc=0
   shift 2
-  if [ -t 1 ] && [ "$V" != 1 ]; then pre='\r'; printf '  ..   %.70s' "$l"; else printf '  ..   %s\n' "$l"; fi
+  printf '  ..   %s\n' "$l"
   if [ "$V" = 1 ]; then
     "$@" 2>&1 | tee "$tmp/out" || rc=${PIPESTATUS[0]}
-    [ -z "$(tail -c1 "$tmp/out")" ] || pre='\n'
+    [ -z "$(tail -c1 "$tmp/out")" ] || echo
   else "$@" >"$tmp/out" 2>&1 || rc=$?; fi
   case $n in -) [ "$rc" -eq 0 ] ;; +*) [ "$rc" -eq 0 ] && grep -qiF -- "${n#+}" "$tmp/out" ;; *) [ "$rc" -ne 0 ] && grep -qiF -- "$n" "$tmp/out" ;; esac ||
-    { [ -z "$pre" ] || echo >&2; [ "$V" = 1 ] || tail -n 30 "$tmp/out" >&2; die "FAILED: $l"; }
-  printf '%b  ok   %s\n' "$pre" "$l"
+    { [ "$V" = 1 ] || tail -n 30 "$tmp/out" >&2; die "FAILED: $l"; }
+  printf '  ok   %s\n' "$l"
 }
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P) # the project is the folder of this script, and that must be its git root
@@ -41,9 +39,9 @@ done
 mkdir -p "$cache"
 export TF_PLUGIN_CACHE_DIR=$cache TF_INPUT=0 CHECKPOINT_DISABLE=1 AWS_ACCESS_KEY_ID=000000000000 AWS_SECRET_ACCESS_KEY=floci-fake-secret
 export AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_EC2_METADATA_DISABLED=true GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
-# tripwire: all but loopback, $HOST and the registry hosts dies at a dead proxy; proven before use
+# tripwire: all but loopback and the registry hosts dies at a dead proxy; proven before use
 export HTTPS_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 ALL_PROXY=http://127.0.0.1:9
-export NO_PROXY="localhost,127.0.0.1,$HOST,registry.opentofu.org,github.com,release-assets.githubusercontent.com"
+export NO_PROXY="localhost,127.0.0.1,registry.opentofu.org,github.com,release-assets.githubusercontent.com"
 case $(curl -q -sS -m 5 -o /dev/null https://tripwire.invalid/ 2>&1 || true) in *"127.0.0.1 port 9"*) ;; *) die "the tripwire is not armed" ;; esac
 
 # floci on 127.0.0.1 with a random port, always removed (with its volume) on exit
@@ -52,10 +50,10 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/e2e.XXXXXX")
 trap 'docker rm -fv "$name" >/dev/null 2>&1 || true; rm -rf "$tmp"' EXIT # || true: under set -e a failed rm would skip the cleanup
 docker run -d --rm --name "$name" -p 127.0.0.1::4566 "$IMAGE" >/dev/null || die "could not start $IMAGE"
 port=$(docker port "$name" 4566/tcp | sed -n '1s/.*://p')
-export AWS_ENDPOINT_URL=http://$HOST:$port # the only redirect; preflight: floci's S3 Control route answers at <account id>.$HOST
-probe() { grep -q awss3control <<<"$(curl -q -sS -m 3 "http://$OTHER.$HOST:$port/v20180820/tags/arn%3Aaws%3As3%3A%3A%3Ae2e" 2>/dev/null || true)"; }
+export AWS_ENDPOINT_URL=http://localhost:$port # the only redirect; preflight: floci's S3 Control route answers at <account id>.localhost (macOS resolves it to loopback)
+probe() { grep -q awss3control <<<"$(curl -q -sS -m 3 "http://$OTHER.localhost:$port/v20180820/tags/arn%3Aaws%3As3%3A%3A%3Ae2e" 2>/dev/null || true)"; }
 for _ in $(seq 60); do probe && break; sleep 0.5; done
-probe || die "floci does not answer at $OTHER.$HOST:$port (glibc Linux: set E2E_ENDPOINT_HOST=localhost.floci.io)"
+probe || die "floci does not answer at $OTHER.localhost:$port (e2e runs on macOS with Docker Desktop only)"
 
 # throwaway project: tracked and unignored files in a scratch git repo (Terramate needs a clean git root)
 mkdir "$tmp/p"

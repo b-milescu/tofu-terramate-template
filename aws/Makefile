@@ -55,34 +55,18 @@ THROWAWAY = if $(IN_TEMPLATE); then \
 help: ## List the targets
 	@awk 'BEGIN { FS = ":.*## " } /^[a-z0-9-]+:.*## / { printf "  %-10s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
+# pre-commit and tflint enforce their own minimum versions when they run (minimum_pre_commit_version, tflint required_version).
 doctor: ## Check the toolchain against the pins (installs nothing; non-zero exit on a missing or wrong tool)
 	@unset TF_PLUGIN_CACHE_DIR; export TENV_SKIP_LAST_USE=1 TFLINT_DISABLE_VERSION_CHECK=1 CKV_SKIP_PACKAGE_UPDATE_CHECK=true; bad=0; \
 	ver() { local o; o=$$("$$@" 2>&1) || return 0; grep -Eo '[0-9]+(\.[0-9]+)+' <<<"$$o" | head -1; }; \
-	ge() { [ "$$(printf '%s\n%s\n' "$$1" "$$2" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" = "$$2" ]; }; \
 	has() { command -v "$$1" >/dev/null 2>&1 || { echo "MISSING $$1"; bad=1; return 1; }; }; \
 	chk() { has "$$1" || return 0; v=$$(ver "$$1" --version); if [ -n "$$v" ]; then echo "ok $$1 $$v"; else echo "WRONG $$1 (no version)"; bad=1; fi; }; \
 	pin() { has "$$1" || return 0; want=$$(awk -v k="$$2" '$$1 == k { print $$2 }' .tool-versions); \
 	  v=$$("$$1" version 2>/dev/null) || { echo "MISSING $$1"; bad=1; return 0; }; v=$${v%%$$'\n'*}; v=$${v#OpenTofu v}; \
 	  if [ -z "$$v" ]; then echo "WRONG $$1 (no version)"; bad=1; elif [ "$$v" = "$$want" ]; then echo "ok $$1 $$v"; else echo "WRONG $$1 $$v want $$want"; bad=1; fi; }; \
-	chk git; \
-	if has pre-commit; then \
-	  v=$$(ver pre-commit --version); \
-	  min=$$(sed -n 's/^minimum_pre_commit_version: *"\{0,1\}\([0-9.]*\).*/\1/p' .pre-commit-config.yaml 2>/dev/null); \
-	  h=$$(mktemp -d); err=$$(PRE_COMMIT_HOME="$$h" pre-commit validate-config .pre-commit-config.yaml 2>&1); rc=$$?; rm -rf "$$h"; \
-	  if [ -z "$$v" ]; then echo "WRONG pre-commit (no version)"; bad=1; \
-	  elif [ $$rc -eq 0 ]; then echo "ok pre-commit $$v"; \
-	  elif [ -n "$$min" ] && ! ge "$$v" "$$min"; then echo "WRONG pre-commit $$v want >= $$min"; bad=1; \
-	  else echo "ok pre-commit $$v"; echo "WRONG .pre-commit-config.yaml is invalid (validate-config exit $$rc):"; sed -e '/^$$/d' -e 's/^/  /' <<<"$$err"; bad=1; fi; \
-	fi; \
-	chk tenv; \
+	chk git; chk pre-commit; chk tenv; \
 	pin tofu opentofu; pin terramate terramate; \
-	if has tflint; then \
-	  v=$$(ver tflint --version); req=$$(sed -n 's/^ *required_version *= *">= *\([0-9.]*\)".*/\1/p' .tflint.hcl | head -1); \
-	  if [ -z "$$v" ]; then echo "WRONG tflint (no version)"; bad=1; \
-	  elif ge "$$v" "$$req"; then echo "ok tflint $$v"; \
-	  else echo "WRONG tflint $$v want >= $$req"; bad=1; fi; \
-	fi; \
-	chk trivy; chk terraform-docs; chk checkov; chk uvx; chk terraform-mcp-server; \
+	chk tflint; chk trivy; chk terraform-docs; chk checkov; chk terraform-mcp-server; \
 	exit $$bad
 
 setup: ## Install the toolchain (Brewfile, tenv pins, tflint plugin, hook environments), then run doctor
@@ -112,31 +96,21 @@ hooks: ## Install the git hooks (pre-commit, pre-push, commit-msg); run it after
 	@$(REFUSE)
 	pre-commit install
 
-# The edit check of `make skill`: the copy must still hold what make skill wrote. The fingerprint is the git blob hash of every
-# entry except SOURCE and directories (path and bytes, no attribute filters), kept on SOURCE's second line; edits, deleted and
-# added files and symlinks change it. Git state plays no part, so an uncommitted update can be rerun. Without a recorded
-# fingerprint (no SOURCE, or the old one-line SOURCE) the check falls back to git: tracked files must match the index.
-SKILL_FP = fp() { (cd "$$1" && find . ! -type d ! -path ./SOURCE | LC_ALL=C sort | while IFS= read -r f; do printf '%s %s\n' "$$(git hash-object --no-filters "$$f" 2>/dev/null)" "$$f"; done) | git hash-object --stdin; };
-
+# -uall: untracked files count too, even with status.showUntrackedFiles=no.
 skill: ## Install or update terraform-skill (latest upstream) in .agents/skills
 	@$(REFUSE)
-	@$(SKILL_FP) d=.agents/skills/terraform-skill; git rev-parse --is-inside-work-tree >/dev/null || exit 1; \
-	if [ -e "$$d" ]; then \
-	  rec=$$(sed -n 's/^content \([0-9a-f][0-9a-f]*\)$$/\1/p' "$$d/SOURCE" 2>/dev/null | head -1); \
-	  if [ -n "$$rec" ]; then [ "$$(fp "$$d")" = "$$rec" ] || { echo "$$d has local edits (its content differs from what make skill wrote): remove the folder and rerun" >&2; exit 1; }; \
-	  else git diff --quiet -- "$$d" || { echo "$$d has local changes: commit or discard your changes first" >&2; exit 1; }; fi; \
-	fi; \
-	old=$$(sed -n 's/.* at \([0-9a-f]*\) (.*/\1/p' "$$d/SOURCE" 2>/dev/null); had=0; [ -e "$$d" ] && had=1; \
+	@d=.agents/skills/terraform-skill; git rev-parse --is-inside-work-tree >/dev/null || exit 1; \
+	old=$$(sed -n 's/.* at \([0-9a-f]*\) (.*/\1/p' "$$d/SOURCE" 2>/dev/null); \
 	t=$$(mktemp -d) || exit 1; trap 'rm -rf "$$t"' EXIT; \
 	$(GIT_TLS) clone -q --depth 1 https://github.com/antonbabenko/terraform-skill.git "$$t/src" || exit 1; \
 	[ -f "$$t/src/skills/terraform-skill/SKILL.md" ] && [ -f "$$t/src/LICENSE" ] || { echo "upstream layout changed: skills/terraform-skill/SKILL.md or LICENSE not found" >&2; exit 1; }; \
 	new=$$(git -C "$$t/src" rev-parse --short=7 HEAD); \
+	[ "$$old" != "$$new" ] || { echo "terraform-skill already at $$new"; exit 0; }; \
+	[ -z "$$(git status --porcelain -uall -- "$$d")" ] || { echo "$$d has uncommitted changes: commit or discard them first" >&2; exit 1; }; \
 	rm -rf "$$d" && mkdir -p "$$(dirname "$$d")" && cp -R "$$t/src/skills/terraform-skill" "$$d" && cp "$$t/src/LICENSE" "$$d/LICENSE" && \
-	{ echo "terraform-skill from https://github.com/antonbabenko/terraform-skill at $$new (default branch, Apache-2.0, unmodified). Update: make skill"; echo "content $$(fp "$$d")"; } > "$$d/SOURCE" || exit 1; \
-	if [ $$had = 0 ]; then echo "terraform-skill installed at $$new"; \
-	elif [ "$$old" = "$$new" ]; then echo "terraform-skill already at $$new"; \
-	else echo "terraform-skill updated $${old:-unknown} -> $$new"; fi; \
-	[ -z "$$(git status --porcelain -- "$$d")" ] || echo 'review "git status" and "git diff -- .agents/skills", then commit'
+	echo "terraform-skill from https://github.com/antonbabenko/terraform-skill at $$new (default branch, Apache-2.0, unmodified). Update: make skill" > "$$d/SOURCE" || exit 1; \
+	echo "terraform-skill at $$new"; \
+	echo 'review "git status" and "git diff -- .agents/skills", then commit'
 
 generate: ## Create missing stack ids, then regenerate the stack code (run after editing *.tm.hcl)
 	@$(REFUSE)

@@ -6,12 +6,6 @@
       "args": ["-u", "TFE_TOKEN", "-u", "TFE_ADDRESS", "HOME=/nonexistent",
                "terraform-mcp-server", "stdio", "--toolsets=registry", "--log-level=error"]
     },
-    "aws-documentation": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": ["--python", "3.13", "awslabs.aws-documentation-mcp-server@latest"],
-      "env": { "FASTMCP_LOG_LEVEL": "ERROR", "AWS_DOCUMENTATION_PARTITION": "aws" }
-    },
     "aws-knowledge": {
       "type": "http",
       "url": "https://knowledge-mcp.global.api.aws"

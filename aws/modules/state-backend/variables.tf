@@ -17,14 +17,3 @@ variable "kms_alias_name" {
     error_message = "kms_alias_name must not start with alias/ or aws/."
   }
 }
-
-variable "noncurrent_version_retention_days" {
-  description = "Days after which noncurrent state versions expire."
-  type        = number
-  default     = 90
-
-  validation {
-    condition     = var.noncurrent_version_retention_days >= 7 && var.noncurrent_version_retention_days <= 3650
-    error_message = "noncurrent_version_retention_days must be between 7 and 3650."
-  }
-}

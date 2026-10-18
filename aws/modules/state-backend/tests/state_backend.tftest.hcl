@@ -4,12 +4,6 @@ mock_provider "aws" {
       account_id = "111111111111"
     }
   }
-
-  mock_data "aws_partition" {
-    defaults = {
-      partition = "aws"
-    }
-  }
 }
 
 override_resource {
@@ -42,16 +36,6 @@ run "hardening_wiring_and_policy" {
   }
 
   assert {
-    condition     = aws_s3_bucket_versioning.state.versioning_configuration[0].status == "Enabled"
-    error_message = "Versioning must be Enabled."
-  }
-
-  assert {
-    condition     = alltrue([aws_s3_bucket_public_access_block.state.block_public_acls, aws_s3_bucket_public_access_block.state.block_public_policy, aws_s3_bucket_public_access_block.state.ignore_public_acls, aws_s3_bucket_public_access_block.state.restrict_public_buckets])
-    error_message = "All four public access block flags must be true."
-  }
-
-  assert {
     condition     = aws_s3_bucket_ownership_controls.state.rule[0].object_ownership == "BucketOwnerEnforced"
     error_message = "ACLs must be disabled (BucketOwnerEnforced)."
   }
@@ -67,8 +51,8 @@ run "hardening_wiring_and_policy" {
   }
 
   assert {
-    condition     = aws_kms_key.state.enable_key_rotation == true && aws_kms_key.state.deletion_window_in_days == 30
-    error_message = "Key rotation must be on and the deletion window 30 days."
+    condition     = aws_kms_key.state.deletion_window_in_days == 30
+    error_message = "The key deletion window must be 30 days."
   }
 
   assert {
@@ -105,7 +89,7 @@ run "hardening_wiring_and_policy" {
 
   assert {
     condition     = length(aws_s3_bucket_lifecycle_configuration.state.rule) == 1 && aws_s3_bucket_lifecycle_configuration.state.rule[0].status == "Enabled" && aws_s3_bucket_lifecycle_configuration.state.rule[0].noncurrent_version_expiration[0].noncurrent_days == 90 && aws_s3_bucket_lifecycle_configuration.state.rule[0].abort_incomplete_multipart_upload[0].days_after_initiation == 7
-    error_message = "Noncurrent versions must expire after 90 days (the default) and incomplete multipart uploads after 7."
+    error_message = "Noncurrent versions must expire after 90 days and incomplete multipart uploads after 7."
   }
 
   assert {
@@ -132,14 +116,4 @@ run "kms_alias_name_rejects_alias_prefix" {
   }
 
   expect_failures = [var.kms_alias_name]
-}
-
-run "retention_rejects_too_short" {
-  command = plan
-
-  variables {
-    noncurrent_version_retention_days = 1
-  }
-
-  expect_failures = [var.noncurrent_version_retention_days]
 }

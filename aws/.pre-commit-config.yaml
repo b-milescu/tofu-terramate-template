@@ -16,13 +16,13 @@ repos:
         args: [--assume-in-merge]
       - id: check-yaml
       - id: end-of-file-fixer
-        exclude: ^\.(agents|claude|kiro)/skills/ # vendored third-party skills keep their bytes
+        exclude: ^\.agents/skills/ # vendored third-party skills keep their bytes
       - id: mixed-line-ending
         args: [--fix=lf]
-        exclude: ^\.(agents|claude|kiro)/skills/
+        exclude: ^\.agents/skills/
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-        exclude: ^\.(agents|claude|kiro)/skills/
+        exclude: ^\.agents/skills/
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0

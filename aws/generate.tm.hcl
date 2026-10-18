@@ -6,6 +6,7 @@ assert {
   message   = "account_id must be a 12-digit AWS account id"
 }
 
+# ponytail: standard partition only: arn:aws is written out in the backend kms_key_id below and in modules/state-backend's key policy; for cn-* or us-gov-* add a partition global and use it in both.
 assert {
   assertion = tm_can(tm_regex("^[a-z]{2}-[a-z]+-[0-9]+$", global.region)) && !tm_can(tm_regex("^cn-", global.region))
   message   = "region (the folder name in stacks/<account>/<region>/) must be a standard-partition AWS region such as eu-central-1, not cn-*, us-gov-* or us-iso*"

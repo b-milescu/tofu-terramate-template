@@ -65,7 +65,7 @@ make update   # hook revisions and the tflint ruleset to their newest releases (
 make hooks    # the git hooks (pre-commit, pre-push, commit-msg); run it after the first commit
 ```
 
-- `make setup` needs [Homebrew](https://brew.sh) on macOS 15+ (Apple Silicon), Linux (x86_64 or arm64, glibc) or WSL2; on Linux and WSL first run `sudo apt-get update && sudo apt-get install -y build-essential procps curl file git unzip` (Homebrew's own requirements on Linux, plus `unzip` for the tflint cask). The first run needs network and takes minutes (about 3 GB of downloads and caches: Homebrew formulae, `~/.tenv`, `~/.tflint.d`, the Go toolchain and Python packages of the hook environments in `~/.cache`, uv's CPython 3.13, the AWS provider in `~/.terraform.d/plugin-cache`); later runs work offline, except that trivy then scans with its embedded checks ([Not covered](#not-covered)).
+- `make setup` needs [Homebrew](https://brew.sh) on macOS 15+ (Apple Silicon), Linux (x86_64 or arm64, glibc) or WSL2; on Linux and WSL first run `sudo apt-get update && sudo apt-get install -y build-essential procps curl file git unzip` (Homebrew's own requirements on Linux, plus `unzip` for the tflint cask). The first run needs network and takes minutes (about 3 GB of downloads and caches: Homebrew formulae, `~/.tenv`, `~/.tflint.d`, the Go toolchain and Python packages of the hook environments in `~/.cache`, the AWS provider in `~/.terraform.d/plugin-cache`); later runs work offline, except that trivy then scans with its embedded checks ([Not covered](#not-covered)).
 - `make check`, `check-all`, `test` and `relock` export `TF_PLUGIN_CACHE_DIR` (default `~/.terraform.d/plugin-cache`, created) to share provider binaries across stacks and modules. Interactive `tofu` and `terramate run` commands need the export themselves, and so do the git hooks: `terraform_validate` on `git push` does not export it, so a fresh clone downloads the AWS provider into every stack and module directory (5 here: about 95 s and 3.9 GB measured). Put `export TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache` (and `mkdir -p "$TF_PLUGIN_CACHE_DIR"`) in your shell profile, or run `make check-all` once: it leaves `.terraform` in place. A directory without a lock file downloads the provider once even with a warm cache; locked inits reuse the cache.
 - When the anonymous GitHub API quota (60 requests per hour per IP) is exhausted, run `TENV_GITHUB_TOKEN=<token> GITHUB_TOKEN=<token> make setup` (the same for `make update`): tenv ignores `GITHUB_TOKEN`, `tflint --init` downloads the AWS ruleset from GitHub. Never print or commit tokens.
 - Run `terramate` and `tofu` from the project root or below it: tenv finds the pins by walking up from the working directory (`terramate -C` and `tofu -chdir` from outside the project ignore them). A missing pinned tool makes the tenv shim exit 42: run `make setup`.
@@ -77,7 +77,7 @@ make hooks    # the git hooks (pre-commit, pre-push, commit-msg); run it after t
 | OpenTofu, Terramate | pinned in `.tool-versions`; `terramate.tm.hcl` sets the Terramate floor | installed by tenv |
 | pre-commit | 4.4.0 or newer (4.7.0 verified) | brew |
 | tflint | 0.61.0 or newer (0.61.0 verified); the AWS ruleset version in `.tflint.hcl` (tflint requires one), newest via `make update` | the `terraform-linters/tap/tflint` cask; the ruleset is fetched by `tflint --init` |
-| trivy, terraform-docs, tenv, uv, terraform-mcp-server | newest at install (0.76.0, 0.24.0, 4.15.1, 0.11.7, 1.3.0 verified) | brew |
+| trivy, terraform-docs, tenv, terraform-mcp-server | newest at install (0.76.0, 0.24.0, 4.15.1, 1.3.0 verified) | brew |
 | checkov | Homebrew's current formula: 3.3.20 verified on 2026-10-17, several patch releases behind PyPI (the formula lags) | brew; the `terraform_checkov` hook runs this system binary |
 | gitleaks | newest hook release (`make update`) | built by pre-commit on first use |
 
@@ -85,16 +85,7 @@ make hooks    # the git hooks (pre-commit, pre-push, commit-msg); run it after t
 
 `make help` lists the targets. `check`, `check-all` and `test` stop with "nothing is tracked yet" until `git add -A` ran: hooks only see tracked files, and on an untracked tree every hook skips and pre-commit exits 0. `make e2e` is not part of `check-all`: it needs Docker and takes minutes ([End-to-end rehearsal](#end-to-end-rehearsal-make-e2e)).
 
-In the template repository, where this folder lies inside another repository's work tree and is not a project (a project is its own git repository), `check`, `check-all`, `test` and `e2e` print `template checkout: running <target> in a throwaway project` and run in a copy of the tracked and unignored files in a scratch git repository (`make generate`, then the target), which is removed on every exit, Ctrl-C included. They need no `git add`. What the hooks did in the copy is applied to the checkout as one patch, and the exit code is the target's:
-
-| Hooks did in the copy | The checkout gets | Message |
-|---|---|---|
-| rewrote a file (the run fails) | the fixes: review `git diff`, rerun | `template checkout: applied the hooks' fixes to this folder: review "git diff", then rerun` |
-| created a file, e.g. a missing module README (the run passes) | the file, untracked: `git status` | `template checkout: the hooks created files in this folder: see "git status"` |
-| something that does not apply (a file in the way, a fix next to a generated stack id) | nothing | `template checkout: could not apply the hooks' fixes; the diff:` and the diff, on stderr |
-| nothing | nothing | none |
-
-Stack ids, generated files and lock files never come back, and a passing run never changes an existing file. `generate`, `relock`, `skill` and `hooks` refuse there (`this folder is a template inside <path>`); a project copied into a subfolder of another repository gets the same treatment: `git init` it.
+In the template repository (this folder lies inside another repository's work tree, so it is not a project: a project is its own git repository), `check`, `check-all`, `test` and `e2e` print `template checkout: running <target> in a throwaway project` and run in a copy of the tracked and unignored files in a scratch git repository (`make generate`, then the target), removed on every exit, Ctrl-C included; they need no `git add`. What the hooks rewrote or created in the copy is applied to the checkout as one patch (review `git diff` and `git status`, then rerun); stack ids, generated files and lock files never come back, a patch that does not apply is printed on stderr instead, and the exit code is the target's. `generate`, `relock`, `skill` and `hooks` refuse there (`this folder is a template inside <path>`); a project copied into a subfolder of another repository gets the same treatment: `git init` it.
 
 ## Parameters
 
@@ -109,7 +100,6 @@ The wizard of the template's RUNBOOK.md (a checkout of the template; its commit 
 | availability zones | `<region>a`, `<region>b`, `<region>c` | 2 or 3 distinct names matching `^<region>[a-z]$` that exist in the account; no offline check can tell (only apply fails). Ask the user for the names when the region is `us-west-1` (two zones per account), `ca-central-1` or `ap-northeast-1`; always tell the user to confirm with `aws ec2 describe-availability-zones --region <region>` (their credentials) before the first plan | `azs` in each `network/main.tf` |
 | VPC CIDR | `10.10.0.0/16` (dev), `10.20.0.0/16` (prod), then `10.30.0.0/16`, ... | `^10\.[0-9]{1,3}\.0\.0/16$`, distinct | `vpc_cidr` in each `network/main.tf` |
 | AWS provider | keep the locked 6.69.1 (verified) | `keep` or `latest` (newest 6.x: `curl -fsS https://registry.opentofu.org/v1/providers/hashicorp/aws/versions`); the constraint `>= 6.0, < 7.0` stays | `latest`: `make relock` after `make generate` |
-| client-side state encryption | no | `no` / `yes` | yes: append the generator of [Client-side state encryption](#client-side-state-encryption-opt-in) to `generate.tm.hcl`, then `make generate` |
 
 Version pins of OpenTofu and Terramate are generic (step 2 of the template's RUNBOOK): `.tool-versions` lines `opentofu X.Y.Z` / `terramate X.Y.Z`; Terramate also `required_version = "~> X.Y.Z"` in `terramate.tm.hcl`; rule `^[0-9]+\.[0-9]+\.[0-9]+$`, OpenTofu >= 1.12.0.
 
@@ -121,7 +111,7 @@ Placeholder values the RUNBOOK leftover scan looks for: `example`, `111111111111
 
 | Hook id | Source | Stage | Checks |
 |---|---|---|---|
-| `check-added-large-files`, `check-merge-conflict`, `check-yaml`, `end-of-file-fixer`, `mixed-line-ending` (lf), `trailing-whitespace` | pre-commit-hooks | both | hygiene; `check-added-large-files` runs with `--enforce-all` and `check-merge-conflict` with `--assume-in-merge` so both also work under `--all-files`; the three fixers skip skill copies (`.agents/`, `.claude/`, `.kiro/` `skills/`) |
+| `check-added-large-files`, `check-merge-conflict`, `check-yaml`, `end-of-file-fixer`, `mixed-line-ending` (lf), `trailing-whitespace` | pre-commit-hooks | both | hygiene; `check-added-large-files` runs with `--enforce-all` and `check-merge-conflict` with `--assume-in-merge` so both also work under `--all-files`; the three fixers skip the skill copy (`.agents/skills/`) |
 | `gitleaks` | gitleaks | both | secrets in the staged changes (blind under `--all-files`) |
 | `gitleaks-history` | gitleaks | pre-push | secrets in every commit (`gitleaks git --redact --verbose`), runs even when no file survives |
 | `conventional-pre-commit` | conventional-pre-commit | commit-msg | Conventional Commits message |
@@ -142,7 +132,7 @@ Placeholder values the RUNBOOK leftover scan looks for: `example`, `111111111111
 - A hook that rewrites files (`end-of-file-fixer`, `terraform_fmt`, `terraform_docs`, `terramate`) fails the run: review the change, `git add` it, run again. `terramate fmt` formats `*.tm.hcl` files up front: run it after editing one by hand.
 - `trivy` and `checkov` are system tools: they must be on the `PATH` of whatever runs git (no hook environment builds them; a GUI git client or a minimal CI image often lacks Homebrew's `bin`). Missing: `checkov: command not found` (exit 127) or `'trivy' is required by 'terraform_trivy' pre-commit hook but it is not discoverable in the system's PATH`. `make doctor` finds both.
 - Network use of the pre-commit-terraform hooks: trivy fetches its checks bundle from `mirror.gcr.io` at most once a day and still runs offline, with its embedded checks ([Not covered](#not-covered)); checkov (the hook sets `CKV_SKIP_PACKAGE_UPDATE_CHECK=true`) and `tofu validate` make no request.
-- Only `tofu-test` unsets every `AWS_*`, `ARM_*`, `AZURE_*`, `AZD_*`, `GOOGLE_*`, `GCP_*` and `CLOUDSDK_*` variable and points the az, azd and gcloud config dirs at an empty temp dir, so cached cloud logins cannot be used either. The pre-commit-terraform hooks run with your environment: `tofu init` and `tofu validate` start the provider binary with your variables (validate does not configure the provider, and made no request in a test with fake credentials), trivy and checkov only read files.
+- Only `tofu-test` unsets every `AWS_*`, `ARM_*`, `AZURE_*`, `AZD_*`, `GOOGLE_*`, `GCP_*` and `CLOUDSDK_*` variable and points the az, azd and gcloud config dirs at an empty temp dir, so cached cloud logins cannot be used either. The pre-commit-terraform hooks run with your environment: `tofu init` and `tofu validate` start the provider binary with your variables (validate does not configure the provider, and made no request in a test with fake credentials; nothing enforces that it stays offline), trivy and checkov only read files.
 
 ### Disabled tools
 
@@ -181,23 +171,17 @@ Project scope: instructions in [AGENTS.md](AGENTS.md); MCP servers in `.mcp.json
 | Server | Gives the agent | Where it runs | Credentials |
 |---|---|---|---|
 | `terraform` | Terraform registry lookups: provider and module versions, resource schemas, docs (9 read-only tools) | local binary | none |
-| `aws-documentation` | read and search AWS documentation pages (5 tools) | local, started with uvx | none |
-| `aws-knowledge` | AWS documentation search, regional availability, region lists and AWS skills (5 read-only tools) | remote: `https://knowledge-mcp.global.api.aws`, hosted by AWS | none |
+| `aws-knowledge` | AWS documentation read and search, regional availability, region lists and AWS skills (5 read-only tools) | remote: `https://knowledge-mcp.global.api.aws`, hosted by AWS | none |
 
-`aws-knowledge` is a remote server hosted by AWS: free, no AWS account, no authentication, subject to rate limits and the AWS Site Terms. Every session start your harness connects to it (`initialize`, `tools/list`: nothing from your project); afterwards only what the agent puts into a tool call leaves your machine: search phrases, documentation URLs, region and skill names. Do not paste secrets or account data into queries. The skills it serves (`aws___retrieve_skill`) are text written by AWS that the agent reads: documentation, not instructions. Not every harness supports remote servers (the RUNBOOK writes the `url` entry for Codex, Cursor, OpenCode and Kiro; for others add it by hand as a remote Streamable HTTP server without authentication).
+`aws-knowledge` is a remote server hosted by AWS: free, no AWS account, no authentication, subject to rate limits and the AWS Site Terms. Every session start your harness connects to it (`initialize`, `tools/list`: nothing from your project); afterwards only what the agent puts into a tool call leaves your machine: search phrases, documentation URLs, region and skill names. Do not paste secrets or account data into queries. The skills it serves (`aws___retrieve_skill`) are text written by AWS that the agent reads: documentation, not instructions. Not every harness reads `.mcp.json` or supports remote servers: add the entries to its own MCP config by hand (`aws-knowledge` as a remote Streamable HTTP server without authentication) and keep it in step with `.mcp.json`.
 
-Why the commands look like this:
+Why the `terraform` command looks like this: `--toolsets=registry` keeps the 9 read-only registry tools (without it a TFE token in `~/.terraform.d/credentials.tfrc.json` exposes 56 tools, 19 of them without a read-only hint); `env -u TFE_TOKEN -u TFE_ADDRESS HOME=/nonexistent` stops the binary from reading and sending that token, and makes it log `failed to create TFE client ... /nonexistent` to stderr on every start: by design, not a failure.
 
-- `terraform`: `--toolsets=registry` keeps the 9 read-only registry tools (without it a TFE token in `~/.terraform.d/credentials.tfrc.json` exposes 56 tools, 19 of them without a read-only hint); `env -u TFE_TOKEN -u TFE_ADDRESS HOME=/nonexistent` stops the binary from reading and sending that token, and makes it log `failed to create TFE client ... /nonexistent` to stderr on every start: by design, not a failure.
-- `uvx --python 3.13`: a compatibility requirement, not a version pin: the newest Homebrew Python (3.15) has no wheels for the server's dependencies, so uv runs it on its own CPython 3.13.
-- `aws-documentation` runs as `@latest`: uvx checks for a newer release on every start, so it follows upstream without a diff to review. The first start downloads, and every start needs the network: offline it fails (`Failed to fetch https://pypi.org/simple/<package>/`) unless the harness environment sets `UV_OFFLINE=1`, which lets it start from uv's cache. `aws-knowledge` needs its endpoint on every start and every use; the `terraform` server works offline.
-
-Cloud API access (credentials, a profile, signed requests) is not shipped: every entry above is lookup-only and credential-free, and the template's RUNBOOK and its MCP check (Appendix B) are for such servers only. If you add a credentialed server yourself, keep it out of `.mcp.json` in the repository, and note that the RUNBOOK's check does not probe entries with `headers` or `oauth`.
+Cloud API access (credentials, a profile, signed requests) is not shipped: every entry above is lookup-only and credential-free. If you add a credentialed server yourself, keep it out of `.mcp.json` in the repository.
 
 - Review changes to `.mcp.json`, `.agents/`, `AGENTS.md`, `.claude/settings.json` and harness files like code: omp, OpenCode and Devin start project MCP servers without asking, and Claude Code does too in `-p` mode and when `enableAllProjectMcpServers` is set in a user settings file or a committed `.claude/settings.json`.
-- The template's RUNBOOK may add harness files next to the shared ones: `CLAUDE.md` (`@AGENTS.md`) for Claude Code; `.codex/config.toml`, `.cursor/mcp.json`, `opencode.json` and `.kiro/settings/mcp.json`, which repeat the entries of `.mcp.json` (change both); the skill and its links ([Skill](#skill)).
+- The template's RUNBOOK may add `CLAUDE.md` (`@AGENTS.md`) for Claude Code and the skill link ([Skill](#skill)).
 - A user-level MCP server with the same name (for example `terraform`) is never overwritten: Claude Code uses the project entry after you approve it (until then yours); omp uses yours only when it is in `~/.omp/agent/mcp.json`, otherwise the project entry runs.
-- The MCP packages need no update step. If a server breaks after an upstream release, check it with Appendix B of the template's RUNBOOK; the stop-gap is `@<last working version>` in `.mcp.json` until upstream fixes it.
 
 ### Skill
 
@@ -207,14 +191,12 @@ Cloud API access (credentials, a profile, signed requests) is not shipped: every
 |---|---|---|
 | Claude Code | the link `.claude/skills/terraform-skill` to the copy | `/terraform-skill` |
 | omp | reads `.agents/skills` | `/skill:terraform-skill` |
-| Kiro | the link `.kiro/skills/terraform-skill` to the copy | by description |
-| Codex, Cursor, OpenCode, GitHub Copilot, Devin, others | read `.agents/skills` (per their documentation, not run here) | `/terraform-skill` or by description |
+| Other harnesses | most read `.agents/skills` (per their documentation, not run here) | `/terraform-skill` or by description |
 
-`make skill` replaces `.agents/skills/terraform-skill` (the folder, its `LICENSE` and a two-line `SOURCE`: the upstream commit and a `content` fingerprint of the files) from a fresh clone of the upstream default branch and always verifies TLS, whatever your git config says. It prints `terraform-skill installed at <sha>` (no copy before), `terraform-skill updated <old> -> <new>` (`unknown` when `SOURCE` is missing or not in its format) or `terraform-skill already at <sha>`, and `review "git status" and "git diff -- .agents/skills", then commit` while git shows changes under the folder.
+`make skill` replaces `.agents/skills/terraform-skill` (the folder, its `LICENSE` and a one-line `SOURCE` naming the upstream commit) from a fresh clone of the upstream default branch and always verifies TLS, whatever your git config says. It prints `terraform-skill at <sha>` and `review "git status" and "git diff -- .agents/skills", then commit`; when `SOURCE` already names the upstream commit it prints only `terraform-skill already at <sha>` and changes nothing.
 
-- It refuses to replace a copy whose files differ from what it wrote: `has local edits (its content differs from what make skill wrote): remove the folder and rerun`. Any change to any file counts (a byte, whitespace, an added, deleted or renamed file, `LICENSE`), committed or not; git state plays no part, so an update can be rerun before you commit. Fix: `rm -rf .agents/skills/terraform-skill`, then `make skill` (your edits are lost: keep project rules in `AGENTS.md`, not in the copy).
-- A copy without a fingerprint (no `SOURCE`, or an older one-line one) falls back to git: its tracked files must match the index (`has local changes: commit or discard your changes first`); the first successful run writes the new `SOURCE`.
-- Copy a project with `git clone` or `COPYFILE_DISABLE=1 tar`: macOS `tar` and Finder zips add AppleDouble `._*` files inside the folder, which count as added files.
+- Before replacing, it refuses while git shows uncommitted changes under the folder, untracked files included: `has uncommitted changes: commit or discard them first`. Discard with `git reset -q -- .agents/skills/terraform-skill && git checkout -- .agents/skills/terraform-skill && git clean -fd -- .agents/skills/terraform-skill` (a copy that was never committed: `rm -rf` it after the `git reset`). Committed edits are replaced without a warning and show as a revert in `git diff`: keep project rules in `AGENTS.md`, not in the copy.
+- Copy a project with `git clone` or `COPYFILE_DISABLE=1 tar`: macOS `tar` and Finder zips add AppleDouble `._*` files inside the folder, which git shows as untracked files.
 - A user-level `terraform-skill` (`~/.claude/skills`, `~/.agents/skills`) may be listed next to the project's.
 
 ## Bootstrap
@@ -283,7 +265,7 @@ It works on a throwaway copy of your tracked and unignored files (your tree and 
 - A foreign account is refused; a held lock refuses a second operation (`PreconditionFailed`) and is then released.
 - Destroy: the reverse destroy of an unprotected account; the guard's refusal where `protect_destroy = true`; the `prevent_destroy` refusal for every `state-backend`.
 
-Each step prints `..` and its label when it starts and `ok` and the label when it passes (on a terminal without `E2E_VERBOSE=1` the second line replaces the first), so the minute-long applies are not silent; a passing run ends with `e2e: all checks passed in <n>s; floci removed on exit, AWS never contacted`. A failing step shows the last 30 lines of its output (with `E2E_VERBOSE=1` all of it is already on screen) and stops the run with `e2e: FAILED: <label>`. A project without generated stack files fails (`e2e: no stacks/<account>/<region>/ with generated files: run make generate`) instead of passing with nothing checked.
+Each step prints `..` and its label when it starts and `ok` and the label when it passes, so the minute-long applies are not silent; a passing run ends with `e2e: all checks passed in <n>s; floci removed on exit, AWS never contacted`. A failing step shows the last 30 lines of its output (with `E2E_VERBOSE=1` all of it is already on screen) and stops the run with `e2e: FAILED: <label>`. A project without generated stack files fails (`e2e: no stacks/<account>/<region>/ with generated files: run make generate`) instead of passing with nothing checked.
 
 It cannot reach AWS: the environment is scrubbed (no `AWS_*`, `TF_*`, `GIT_*`, proxy or token variable, no AWS config files, no instance metadata), the only credentials are fake (the account id as access key id), `AWS_ENDPOINT_URL` is the only redirect (loopback, preflight-checked), and every other host dies at a dead proxy, proven by a `curl` before the run and a `tofu plan` without the endpoint during it. The network is needed for the OpenTofu registry and GitHub only (provider and module downloads; the first run also pulls the 250 MB image).
 
@@ -299,8 +281,6 @@ Knobs, all optional environment variables:
 | Variable | Default | Use |
 |---|---|---|
 | `E2E_IMAGE` | `floci/floci:latest` | pin a tag or digest (for example `floci/floci:2.3.0`) when a new image regresses; 2.3.0 is what it ran against |
-| `E2E_ENDPOINT_HOST` | `localhost` | the provider calls S3 Control at `<account id>.<host>`, so the host must resolve every subdomain to loopback: true on macOS, not on glibc Linux, where `localhost.floci.io` (public wildcard DNS) works |
-| `E2E_KNOWN_DRIFT` | `module.vpc.aws_default_network_acl.this[0] module.vpc.aws_flow_log.this[0]` | resource addresses allowed to show as changes in the second plan (floci issues 5720 and 5729); any other change fails the run. Remove them when those issues close |
 | `E2E_VERBOSE` | unset | `1` streams the output of every step live (a full run is about 4700 lines); any other value: only a failing step shows its last 30 lines |
 
 Run on macOS with Docker Desktop only: not on Linux or WSL2. A new floci image can change the result (`latest` is not pinned).
@@ -346,12 +326,11 @@ Each of these in its own pull request.
 | What | Where | Then |
 |---|---|---|
 | OpenTofu, Terramate | `.tool-versions`; `terramate.tm.hcl` `required_version` when the Terramate minor changes | `make setup` (installs the pins), `make doctor` |
-| Homebrew tools (trivy, checkov, terraform-docs, tenv, uv, pre-commit, terraform-mcp-server) | the `Brewfile` lists them without versions | `brew upgrade <name>`, yours to run (`make setup` installs what is missing and keeps installed formulae; the doctor only checks that they run), then `make doctor` and `make check-all` |
+| Homebrew tools (trivy, checkov, terraform-docs, tenv, pre-commit, terraform-mcp-server) | the `Brewfile` lists them without versions | `brew upgrade <name>`, yours to run (`make setup` installs what is missing and keeps installed formulae; the doctor only checks that they run), then `make doctor` and `make check-all` |
 | AWS provider constraint | `aws_provider_version` in `globals.tm.hcl`; for modules `modules/*/versions.tf` | `make generate`, then `make relock` |
 | Registry module | exact `version` in the stack's `main.tf` (OpenTofu intersects its own provider floor with `aws_provider_version`; nothing is promoted into the global) | `make relock` |
 | Hook revisions, tflint ruleset | `.pre-commit-config.yaml` (plain tags), the plugin `version` in `.tflint.hcl` | `make update` (newest tag on each hook repository's default branch: for gitleaks that can lag its newest release), then `make check-all` |
 | terraform-skill | `.agents/skills/terraform-skill` | `make skill`, then review `git diff -- .agents/skills` ([Skill](#skill)) |
-| MCP servers | `@latest` in `.mcp.json` | nothing: uvx fetches the newest release on every start ([Agent tooling](#agent-tooling)) |
 
 `make relock` runs `tofu init -backend=false -upgrade` in every stack (`terramate run --disable-safeguards=git`, needed because `make generate` just dirtied the tree; the outdated-code safeguard stays on) and in every `modules/*/`. Finish with `make check-all`.
 
@@ -389,79 +368,32 @@ Least-privilege state access for the identity that runs `terramate run`; replace
 
 `<key-id>`: `aws kms describe-key --key-id alias/<project>-tfstate --query KeyMetadata.KeyId --output text`. Not evaluated by AWS: the statement follows the backend's access pattern and has never been tried against real AWS, so try it in a sandbox account before relying on it.
 
-## Client-side state encryption (opt-in)
-
-OpenTofu state and plan encryption is off by default: the key must exist before the first state write, every plan and apply then needs KMS access, and losing the key loses the state. SSE-KMS, versioning and TLS-only already protect the bucket. To enable it for every stack except the `state-backend` stacks (their state would depend on the key they create), add this generator to `generate.tm.hcl` and run `make generate`:
-
-```hcl
-generate_hcl "_terramate_generated_encryption.tf" {
-  condition = !tm_contains(terramate.stack.tags, "state-backend")
-
-  content {
-    terraform {
-      encryption {
-        key_provider "aws_kms" "state" {
-          encrypted_metadata_alias = "state"
-          key_spec                 = "AES_256"
-          kms_key_id               = "alias/${global.state_kms_alias}"
-          region                   = global.region
-        }
-
-        method "aes_gcm" "state" {
-          keys = key_provider.aws_kms.state
-        }
-
-        state {
-          enforced = true
-          method   = method.aes_gcm.state
-        }
-
-        plan {
-          enforced = true
-          method   = method.aes_gcm.state
-        }
-      }
-    }
-  }
-}
-```
-
-Rehearsed against an emulator only ([Not covered](#not-covered)); the `condition` line changed after that, and the block was only checked with `terramate generate` (a file for `network`, none for `state-backend`), not re-run on the emulator.
-
-Add it before a stack's first apply. A stack that already holds unencrypted state needs OpenTofu's migration through an `unencrypted` fallback first, without `enforced` ([State and Plan Encryption](https://opentofu.org/docs/language/state/encryption/)); delete saved plans made before the migration, they keep the plaintext.
-
-Residual risk:
-
-- One shared key: OpenTofu's documentation recommends a dedicated KMS key per state; here the key that backs SSE-KMS serves every stack, so there is no second access gate and no isolation between stacks.
-
 ## Design decisions
 
 1. **Account = environment**: `stacks/<account>/<region>/<stack>`, one state bucket and KMS key per account and region; blast radius follows account boundaries.
 2. **State key = stack id** (`stacks/<id>/tofu.tfstate`): moving a folder cannot orphan state; ids come from `make generate` (`terramate create --ensure-stack-ids`) and are never copied, so every project gets fresh state keys.
 3. **S3 backend with `use_lockfile`, `encrypt` plus a KMS alias ARN, `allowed_account_ids`**: no DynamoDB; `encrypt` alone means SSE-S3; a wrong account is refused.
-4. **No client-side state encryption by default**: the key must pre-exist and its loss would mean state loss; SSE-KMS, versioning and TLS-only already cover the bucket.
+4. **No client-side state encryption by default**: the key must pre-exist and its loss would mean state loss; SSE-KMS, versioning and TLS-only already cover the bucket. To enable it, follow OpenTofu's [State and Plan Encryption](https://opentofu.org/docs/language/state/encryption/) before a stack's first apply (existing state needs its migration path) and leave out the `state-backend` stacks (their state would depend on the key they create); reusing the bucket's KMS key gives no second access gate and no isolation between stacks.
 5. **Backend, provider and versions are generated from globals, and greps guard the generator**: a dropped security line would otherwise regenerate everywhere silently.
 6. **`language { compatible_with }` gates the OpenTofu version**: OpenTofu 1.12+ does not enforce `required_version` in `.tf` files.
 7. **Lock files committed for stacks and modules, `-lockfile=readonly` in every hook**: reproducible installs; `tofu init` 1.12+ records hashes for all platforms.
-8. **`state-backend` is plain resources with plan-only mock tests** that assert encryption, versioning, public access block, ownership, both policies, key rotation, alias, lifecycle rule and `force_destroy = false`, but not `prevent_destroy`; workload stacks use registry modules pinned exactly.
+8. **`state-backend` is plain resources with plan-only mock tests** that assert the CMK wiring and `aws:kms` default encryption, bucket key, ownership, both policies, key deletion window, alias, lifecycle rule and `force_destroy = false`, but not `prevent_destroy`; versioning, the public access block and key rotation are left to `terraform_trivy` and `terraform_checkov`. Workload stacks use registry modules pinned exactly.
 9. **Destroy guard**: `protect_destroy` generates a `prevent_destroy` resource into every stack of a protected account, since Terramate has none; `-target` and `-exclude` bypass it.
 
 ## Not covered
 
-- Real AWS: the S3 backend's acceptance of the KMS alias ARN, `use_lockfile` semantics, IAM and key policies as AWS evaluates them, and applying the `network` stack were never exercised. `make e2e` runs Bootstrap, state migration, plan and apply (the `network` stack included) and the destroy guard against the floci emulator with these files: it shows that OpenTofu, the provider and Terramate accept the generated blocks, not that AWS does. Client-side encryption was rehearsed against an emulator (moto) in the design phase only, not with these files.
+- Real AWS: the S3 backend's acceptance of the KMS alias ARN, `use_lockfile` semantics, IAM and key policies as AWS evaluates them, and applying the `network` stack were never exercised. `make e2e` runs Bootstrap, state migration, plan and apply (the `network` stack included) and the destroy guard against the floci emulator with these files: it shows that OpenTofu, the provider and Terramate accept the generated blocks, not that AWS does.
 - Registry-module internals and inputs are not scanned (`terraform_trivy` runs with `--tf-exclude-downloaded-modules`; checkov does not read downloaded modules): the exact version pin is the control.
 - `terraform_trivy` scans with the checks bundle it downloads from `mirror.gcr.io` (a few megabytes, re-checked once the cache is a day old, kept in trivy's cache: `~/Library/Caches/trivy` on macOS, `~/.cache/trivy` on Linux). When the download or the re-check fails it logs `Falling back to embedded checks` (hidden by pre-commit while the hook passes; a cache older than a day is not used then either), scans with the checks built into the installed trivy and still exits 0: the same tree can pass in one environment and fail in another once a new check ships. Two known causes: no network, and a `credsStore` in `~/.docker/config.json` (Docker Desktop) whose helper (`docker-credential-desktop`) is not on `PATH`, as in a trimmed agent environment (`error getting credentials`). `trivy conf . --debug` shows which one applies.
-- Only `tofu-test` scrubs the environment ([Checks](#checks)); nothing enforces that `tofu validate`, which starts the provider binary with your variables, stays offline.
 - Mocks prove module logic, not provider behaviour: `tofu test` runs plan-only against `mock_provider`.
 - `prevent_destroy` and other lifecycle arguments are invisible to tests: review the module diff.
-- `validate` and `test` never read backend or encryption blocks (`init -backend=false`): the `generated-*` greps cover the generated text. After changing a backend generator, run `tofu init -input=false` in one stack without credentials. It must fail only with credential errors: `No valid credential sources found`, `failed to refresh cached credentials`, then `Retrieving AWS account details` (it may say `Missing Region`) and `Invalid account ID`, both caused by the missing credentials. A schema problem is reported before those, as `Unsupported argument`, `Incorrect attribute value type` or `Invalid KMS Key ID`. A real `tofu init` is the only full check.
+- `validate` and `test` never read backend blocks (`init -backend=false`): the `generated-*` greps cover the generated text. After changing a backend generator, run `tofu init -input=false` in one stack without credentials. It must fail only with credential errors: `No valid credential sources found`, `failed to refresh cached credentials`, then `Retrieving AWS account details` (it may say `Missing Region`) and `Invalid account ID`, both caused by the missing credentials. A schema problem is reported before those, as `Unsupported argument`, `Incorrect attribute value type` or `Invalid KMS Key ID`. A real `tofu init` is the only full check.
 - Nothing server-side denies SSE-S3 writes: `encrypt` alone is SSE-S3, and only the `generated-backend` check keeps `kms_key_id`.
 - Bucket and key policies are asserted as documents; only AWS evaluates their effect.
 - Client-side state encryption is off.
-- Local hooks can be bypassed; see the CI contract.
 - gitleaks knows token formats, not passwords: it does not flag a password embedded in a URL (`https://user:password@host`).
-- Taken at their newest release when installed or updated: the hooks, the tflint ruleset, terraform-skill and the Homebrew tools. A new upstream version can change what a check or your agent does without any change in this repository: review the `make update` and `make skill` diff before committing. The MCP side changes without a diff to review: `aws-documentation` updates on every start, and `aws-knowledge` is a third-party hosted service (rate-limited, needs the network, tools and skills can change at any time).
-- Supply chain: pre-commit downloads a Go toolchain for gitleaks without hashes; checkov and trivy come from Homebrew, Terramate is verified by checksum only; MCP servers and hook environments run with your shell's environment (only the `terraform` entry removes credential variables, see [Agent tooling](#agent-tooling)). `make setup` and `make update` build the hook environments with the cloud variables and the GitHub tokens unset.
+- Taken at their newest release when installed or updated: the hooks, the tflint ruleset, terraform-skill and the Homebrew tools. A new upstream version can change what a check or your agent does without any change in this repository: review the `make update` and `make skill` diff before committing. The MCP side changes without a diff to review: `aws-knowledge` is a third-party hosted service (rate-limited, needs the network, tools and skills can change at any time).
+- Supply chain: pre-commit downloads a Go toolchain for gitleaks without hashes; checkov and trivy come from Homebrew, Terramate is verified by checksum only; the `terraform` MCP server (its entry unsets `TFE_TOKEN` and `TFE_ADDRESS`, see [Agent tooling](#agent-tooling)) and the hook environments run with your shell's environment. `make setup` and `make update` build the hook environments with the cloud variables and the GitHub tokens unset.
 - `make setup`, `make update` and `make skill` force TLS verification for their git fetches, whatever your git config says. A path-scoped override (`http.https://github.com/<owner>/.sslVerify=false`) is more specific and wins; git older than 2.31 ignores the mechanism for pre-commit's own git calls (direct git calls are unaffected); a TLS-intercepting network makes the three fail.
 - Verified on macOS (arm64) and, from `make setup` through both hook stages, in an Ubuntu 24.04 arm64 container; x86_64 Linux and WSL2 were not run.
 

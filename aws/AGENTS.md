@@ -15,11 +15,10 @@ Project `.mcp.json`, lookup only:
 | Server | Use |
 |---|---|
 | `terraform` | Terraform registry: provider and module versions, resource schemas, docs. Versions and schemas come from it or the registries, never from memory |
-| `aws-documentation` | read AWS documentation pages; search them |
-| `aws-knowledge` | remote AWS-hosted server: regional availability, region lists, AWS skills; it also searches the documentation. Your queries go to AWS: never put secrets or account data in them |
+| `aws-knowledge` | remote AWS-hosted server: reads and searches AWS documentation, regional availability, region lists, AWS skills. Your queries go to AWS: never put secrets or account data in them |
 
 - Never add credentials, `--profile`, TFE tokens or `ENABLE_TF_OPERATIONS` to the MCP config; keep `--toolsets=registry`. This project has no cloud-API MCP server: do not add one.
-- Skill `terraform-skill` (the committed copy in `.agents/skills`, installed and updated with `make skill`): HCL authoring, review, tests, state work. Invoke it as `/terraform-skill` (Claude Code), `/skill:terraform-skill` (omp), by description elsewhere. Never edit the copy: `make skill` refuses to replace a copy whose files differ from what it wrote (put project rules in this file). If your harness does not list it, tell the user to run `make skill` ([README](README.md#skill)); do not run it yourself unless asked. Where its examples differ from this file (`terraform`, `-auto-approve`, `state mv`/`rm`, `import`), this file wins.
+- Skill `terraform-skill` (the committed copy in `.agents/skills`, installed and updated with `make skill`): HCL authoring, review, tests, state work. Invoke it as `/terraform-skill` (Claude Code), `/skill:terraform-skill` (omp), by description elsewhere. Never edit the copy: `make skill` replaces it wholesale and refuses only while git shows uncommitted changes under it (put project rules in this file). If your harness does not list it, tell the user to run `make skill` ([README](README.md#skill)); do not run it yourself unless asked. Where its examples differ from this file (`terraform`, `-auto-approve`, `state mv`/`rm`, `import`), this file wins.
 
 ## Trust
 

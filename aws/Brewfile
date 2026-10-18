@@ -7,6 +7,5 @@ brew "pre-commit"
 brew "terraform-docs"
 brew "trivy"
 brew "checkov"                         # terraform_checkov hook runs the system checkov, no hook-managed Python environment
-brew "uv"                              # uvx runs the aws-documentation server (.mcp.json)
 brew "terraform-mcp-server"            # Terraform registry lookups for the agent (.mcp.json)
 cask "terraform-linters/tap/tflint"    # fully qualified: short cask names are skipped on Linux

@@ -1,19 +1,18 @@
 data "aws_caller_identity" "current" {}
 
-data "aws_partition" "current" {}
-
 resource "aws_kms_key" "state" {
   description             = "OpenTofu state key for ${var.bucket_name}"
   enable_key_rotation     = true
   deletion_window_in_days = 30
 
+  # arn:aws: standard-partition regions only (the region assert in generate.tm.hcl).
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Sid       = "AccountAdmin"
         Effect    = "Allow"
-        Principal = { AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
         Action    = "kms:*"
         Resource  = "*"
       },
@@ -117,7 +116,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
     filter {}
 
     noncurrent_version_expiration {
-      noncurrent_days = var.noncurrent_version_retention_days
+      noncurrent_days = 90
     }
 
     abort_incomplete_multipart_upload {
