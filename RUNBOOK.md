@@ -6,7 +6,7 @@ Order: the project is created before dependencies are installed because its `Bre
 
 ## Rules
 
-1. No cloud credentials: never read, print, export or ask for them; never run `aws`, `az`, `gcloud`, `tofu plan`/`apply`.
+1. No credentials (cloud, vCenter, GitLab or other tokens): never read, print, export or ask for them, and never list the environment (`env`, `printenv`, `export`, `set`): the user's shell may hold them; never run `aws`, `az`, `gcloud`, `govc`, `tofu plan`/`apply`.
 2. Consent: nothing is written before the step-2 summary gets an explicit yes; that summary names the machine-wide changes and caches the later steps make, also when `make doctor` is already green. Homebrew installs and `brew trust` need the yes of step 4 as well. Unlinking or uninstalling formulae and shell-profile edits need their own yes. User-level files (`~/.gitconfig`, `~/.claude.json`, harness trust files) are never written by you: print the exact command for the user. The one exception is what the tool itself writes after the user's yes: the Homebrew trust entry (`make setup`, step 4).
 3. Never: `SKIP=...`, `--no-verify`, `sudo` (the USER runs any sudo line), running as root outside a container, `terraform`, `-auto-approve`, `TENV_AUTO_INSTALL`, `tenv ... use`, deleting or replacing anything you did not create in this session without the user's yes for that path.
 4. Location: the template is read-only. From step 3 on every command runs in `$T`: start each block with `cd "${T:?}" &&` (`:?` aborts when `T` is unset or empty) or set the shell tool's working directory, and write `"${TPL:?}"` and `"${T:?}"` in every other path; never run steps 3-8 in `$TPL` or inside it.
@@ -92,7 +92,7 @@ v='<explicit version>'; [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || echo "REJECT: no
 
 Then print the final values and the derived ones (the names the README derives, for example state bucket and key alias per account and region), plus these statements, and wait for an explicit yes:
 
-- Steps 3-7 write the project at `$T`. Outside it they write caches of about 3 GB in total, also when every tool is already installed (`~/.cache/pre-commit`, the pip, go-build and Homebrew caches and trivy's checks bundle in `~/Library/Caches` or `~/.cache`, `~/.tflint.d`, `~/.terraform.d/plugin-cache`) and, only when `make doctor` finds something missing, Homebrew packages, `brew trust` and OpenTofu and Terramate under `~/.tenv`.
+- Steps 3-7 write the project at `$T`. Outside it they write caches of about 3 GB in total, also when every tool is already installed (`~/.cache/pre-commit`, the pip, go-build and Homebrew caches, `~/.tflint.d`, `~/.terraform.d/plugin-cache` and, when the provider README's Checks lists trivy, its checks bundle in `~/Library/Caches` or `~/.cache`) and, only when `make doctor` finds something missing, Homebrew packages, `brew trust` and OpenTofu and Terramate under `~/.tenv`.
 - Only OpenTofu, Terramate and the provider version (plus the exact registry-module versions in the code) are pinned. Everything else is taken at its newest release: the Homebrew tools, the hook revisions and the tflint ruleset (`make update`, run once in step 4) and terraform-skill (`make skill`, step 6).
 - The MCP servers in `.mcp.json` give lookups only (documentation, registry, regions and skills): no cloud API access and no credentials. A server with a `url` is remote: the agent's queries go to that host (the provider README's "Agent tooling" table names each one).
 
@@ -208,7 +208,7 @@ Poll `tail -n 5 <log>` until a line `exit=<code>` appears; `exit=0` is success, 
 cd "${T:?}" && export CHECKPOINT_DISABLE=1 && terramate list && terramate generate --detailed-exit-code; echo "rc=$?"
 ```
 
-`terramate list` shows the stacks the provider README's Layout lists, per account and region; `rc=0` (2 means files were still being written: rerun `make generate`); every derived value from step 2 appears in the generated files: `grep -rF --include='_terramate_generated_*.tf' -- '<value>' stacks`.
+`terramate list` shows the stacks the provider README's Layout lists, for each of its first two folder levels; `rc=0` (2 means files were still being written: rerun `make generate`); every derived value from step 2 appears in the generated files: `grep -rF --include='_terramate_generated_*.tf' -- '<value>' stacks`.
 
 **If it fails** `make generate` prints the failing assert or stack; fix the value in the file named there (Parameters rules) and rerun. `This object does not have an attribute named "id"` means `make generate` was skipped: run it.
 
@@ -302,8 +302,8 @@ One commit, no `status` lines, three hooks listed, `step 7 ok`. Not done here: r
   - open a NEW session of each chosen harness at the project root and perform its Appendix A action; unless the MCP step was declined, ask the agent there to list its `terraform` server's tools: only the registry tools that the provider README's "Agent tooling" lists may appear, none for workspaces, runs, variables or private registries;
   - replace placeholder values the wizard did not get (for example account ids) and confirm the provider-specific values the README lists (for example availability zones) before the first plan: README "Parameters", then `make generate`, commit;
   - if they add an `origin`, push `main` before the first `terramate run` (without a remote the check is skipped);
-  - bootstrap the state backends per the README;
-  - make sure the shell or tool that runs `git commit` and `git push` has Homebrew on PATH (on Linux: `eval "$(<prefix>/bin/brew shellenv)"` in their shell profile, their edit): the hooks call `trivy` and `checkov` from there; export `TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache` there too (README "Prerequisites"), or the first `git push` of a fresh clone downloads the provider once per directory;
+  - do the README's Bootstrap section;
+  - make sure the shell or tool that runs `git commit` and `git push` has Homebrew on PATH (on Linux: `eval "$(<prefix>/bin/brew shellenv)"` in their shell profile, their edit): the hooks call the system tools that the provider README's Checks names from there; export `TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache` there too (README "Prerequisites"), or the first `git push` of a fresh clone downloads the provider once per directory;
 - MCP servers with the same name as one of their user-level ones (for example `terraform`): Claude Code uses the project entry after approval (until then theirs); omp uses theirs only when it is in `~/.omp/agent/mcp.json`, otherwise the project entry runs;
 - updates, for them and teammates (teammates need nothing: everything is committed): `make skill` for the skill and `make update` for the hook revisions and the tflint ruleset, each followed by reviewing `git diff` and a commit (README "Upgrades");
 - optional, only when the provider README has an "End-to-end rehearsal" section: `make e2e` (platform and duration as that section states) replays Bootstrap, Operate and Destroy against a local emulator and never touches the cloud; not run here (Rule 1);

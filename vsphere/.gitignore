@@ -1,0 +1,22 @@
+# OpenTofu working files. .terraform.lock.hcl IS committed, for stacks and modules alike.
+.terraform/
+.terraform.tfstate.lock.info
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash*.log
+
+# Local-only overrides: they replace the generated backend or provider and never go into git.
+*_override.tf
+*_override.tf.json
+
+# Variable files may hold secrets; stacks get their values from Terramate globals.
+*.tfvars
+*.tfvars.json
+
+# Editor and OS files; personal agent settings.
+.DS_Store
+.idea/
+.vscode/
+.claude/settings.local.json
