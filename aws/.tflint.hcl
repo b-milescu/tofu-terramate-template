@@ -22,7 +22,7 @@ rule "terraform_comment_syntax" {
   enabled = false
 }
 
-# Stacks are root modules without variables.tf and outputs.tf.
+# Stacks and modules/state-backend lack some of main.tf, variables.tf and outputs.tf.
 rule "terraform_standard_module_structure" {
   enabled = false
 }

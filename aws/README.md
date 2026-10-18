@@ -68,7 +68,7 @@ make hooks    # the git hooks (pre-commit, pre-push, commit-msg); run it after t
 - `make setup` needs [Homebrew](https://brew.sh) on macOS 15+ (Apple Silicon), Linux (x86_64 or arm64, glibc) or WSL2; on Linux and WSL first run `sudo apt-get update && sudo apt-get install -y build-essential procps curl file git unzip` (Homebrew's own requirements on Linux, plus `unzip` for the tflint cask). The first run needs network and takes minutes (about 3 GB of downloads and caches: Homebrew formulae, `~/.tenv`, `~/.tflint.d`, the Go toolchain and Python packages of the hook environments in `~/.cache`, the AWS provider in `~/.terraform.d/plugin-cache`); later runs work offline, except that trivy then scans with its embedded checks ([Not covered](#not-covered)).
 - `make check`, `check-all`, `test` and `relock` export `TF_PLUGIN_CACHE_DIR` (default `~/.terraform.d/plugin-cache`, created) to share provider binaries across stacks and modules. Interactive `tofu` and `terramate run` commands need the export themselves, and so do the git hooks: `terraform_validate` on `git push` does not export it, so a fresh clone downloads the AWS provider into every stack and module directory (5 here: about 95 s and 3.9 GB measured). Put `export TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache` (and `mkdir -p "$TF_PLUGIN_CACHE_DIR"`) in your shell profile, or run `make check-all` once: it leaves `.terraform` in place. A directory without a lock file downloads the provider once even with a warm cache; locked inits reuse the cache.
 - When the anonymous GitHub API quota (60 requests per hour per IP) is exhausted, run `TENV_GITHUB_TOKEN=<token> GITHUB_TOKEN=<token> make setup` (the same for `make update`): tenv ignores `GITHUB_TOKEN`, `tflint --init` downloads the AWS ruleset from GitHub. Never print or commit tokens.
-- Run `terramate` and `tofu` from the project root or below it: tenv finds the pins by walking up from the working directory (`terramate -C` and `tofu -chdir` from outside the project ignore them). A missing pinned tool makes the tenv shim exit 42: run `make setup`.
+- Run `terramate` and `tofu` from the project root or below it: tenv finds the pins by walking up from the working directory (`terramate -C` from outside the project ignores them). A missing pinned tool makes the tenv shim exit 42: run `make setup`.
 - Commit messages follow Conventional Commits (`feat:`, `fix:`, `chore:`, ...); the `commit-msg` hook enforces it.
 - Optional: `export CHECKPOINT_DISABLE=1` stops Terramate's update check in interactive runs (the Makefile and the hooks set it).
 
@@ -83,9 +83,9 @@ make hooks    # the git hooks (pre-commit, pre-push, commit-msg); run it after t
 
 ## Make targets
 
-`make help` lists the targets. `check`, `check-all` and `test` stop with "nothing is tracked yet" until `git add -A` ran: hooks only see tracked files, and on an untracked tree every hook skips and pre-commit exits 0. `make e2e` is not part of `check-all`: it needs Docker and takes minutes ([End-to-end rehearsal](#end-to-end-rehearsal-make-e2e)).
+`make help` lists the targets. `check`, `check-all` and `test` stop with "nothing is tracked yet" until `git add -A` ran: hooks only see tracked files, and on an untracked tree every hook skips and pre-commit exits 0. `make e2e` is not part of `check-all`: it runs on macOS with Docker Desktop only and takes minutes ([End-to-end rehearsal](#end-to-end-rehearsal-make-e2e)).
 
-In the template repository (this folder lies inside another repository's work tree, so it is not a project: a project is its own git repository), `check`, `check-all`, `test` and `e2e` print `template checkout: running <target> in a throwaway project` and run in a copy of the tracked and unignored files in a scratch git repository (`make generate`, then the target), removed on every exit, Ctrl-C included; they need no `git add`. What the hooks rewrote or created in the copy is applied to the checkout as one patch (review `git diff` and `git status`, then rerun); stack ids, generated files and lock files never come back, a patch that does not apply is printed on stderr instead, and the exit code is the target's. `generate`, `relock`, `skill` and `hooks` refuse there (`this folder is a template inside <path>`); a project copied into a subfolder of another repository gets the same treatment: `git init` it.
+In the template repository (this folder lies inside another repository's work tree, so it is not a project: a project is its own git repository), `check`, `check-all`, `test` and `e2e` print `template checkout: running <target> in a throwaway project` and run in a copy of the tracked and unignored files in a scratch git repository (`make generate`, then the target), removed on every exit, Ctrl-C included; they need no `git add`. What the hooks rewrote or created in the copy is applied to the checkout as one patch (review `git diff` and `git status`, then rerun); stack ids and generated files never come back, a patch that does not apply is printed on stderr instead, and the exit code is the target's. `generate`, `relock`, `skill` and `hooks` refuse there (`this folder is a template inside <path>`); a project copied into a subfolder of another repository gets the same treatment: `git init` it.
 
 ## Parameters
 
@@ -147,7 +147,8 @@ Placeholder values the RUNBOOK leftover scan looks for: `example`, `111111111111
 | `terragrunt_*` | Terramate is the orchestrator | none |
 | terramate-io/pre-commit-hooks | run bare commands at the git root; pass when generated files are missing | local `terramate` |
 | `detect-aws-credentials`, `detect-private-key` | gitleaks covers both | `gitleaks` |
-| yamllint, markdownlint, typos, shellcheck | no shell files; style only (`check-yaml` covers YAML syntax) | none |
+| yamllint, markdownlint, typos | style only (`check-yaml` covers YAML syntax) | none |
+| shellcheck | `e2e.sh` is the only shell file and is optional (`make e2e`) | none |
 
 ## CI contract
 
@@ -160,7 +161,7 @@ test -z "$(git status --porcelain)"
 ```
 
 - `check-all` is one run of the pre-push stage, which holds every commit-stage hook too (`default_stages`). A bare `pre-commit run --all-files` would skip the push-only hooks, `gitleaks-history` among them (`gitleaks` only sees staged changes).
-- The last two commands catch rewrites and new untracked files (READMEs, lock files) that a hook can create while still reporting success.
+- The last two commands catch rewrites and new untracked files (READMEs) that a hook can create while still reporting success.
 - This is the only authoritative gate. `--no-verify`, `SKIP` and a missing `make hooks` bypass the local hooks, and deletion-only commits skip every file-based hook (only `gitleaks-history` always runs).
 - Plan and apply need credentials and are out of scope for the template; the runbook is under [Operate](#operate).
 
@@ -254,7 +255,7 @@ terramate run --no-tags state-backend --reverse -- tofu apply tfplan
 Optional, not part of `check-all`: it replays [Bootstrap](#bootstrap), [Operate](#operate) and Destroy with this project's own files against [floci](https://github.com/floci-io/floci), a free local AWS emulator in Docker. Run it after changing generators, the state-backend module or the version pins, or to try a newer floci image.
 
 ```bash
-make e2e                  # about 3.5 minutes; needs Docker, curl, the pinned tofu and terramate (make setup) and the project's git checkout
+make e2e                  # about 3.5 minutes; needs macOS with Docker Desktop, curl, the pinned tofu and terramate (make setup) and the project's git checkout
 E2E_VERBOSE=1 make e2e    # the same, streaming the output of every step
 ```
 

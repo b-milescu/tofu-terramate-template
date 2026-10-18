@@ -7,18 +7,9 @@ mock_provider "aws" {
 }
 
 override_resource {
-  target = aws_kms_key.state
-  values = {
-    arn    = "arn:aws:kms:eu-west-1:111111111111:key/00000000-0000-0000-0000-000000000000"
-    key_id = "00000000-0000-0000-0000-000000000000"
-  }
-}
-
-override_resource {
   target = aws_s3_bucket.state
   values = {
     arn = "arn:aws:s3:::acme-tfstate-nonprod-eu-west-1"
-    id  = "acme-tfstate-nonprod-eu-west-1"
   }
 }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Rehearses the README's Bootstrap, Operate and Destroy against floci (https://github.com/floci-io/floci), a local AWS emulator
-# in Docker: `make e2e` (in a template checkout make runs it in a throwaway project). Needs Docker, tofu, terramate (make setup),
+# in Docker: `make e2e` (in a template checkout make runs it in a throwaway project). Needs macOS with Docker Desktop, tofu, terramate (make setup),
 # curl, and network for the registry and GitHub, never for AWS. E2E_VERBOSE=1 also streams every step's output live.
 # It runs on a throwaway copy of the project and cannot reach AWS: scrubbed environment, fake credentials only (the account id
 # as access key id), AWS_ENDPOINT_URL as the only redirect (loopback, random port, preflighted), a dead proxy for every other
@@ -61,7 +61,7 @@ cd "$root"
 git ls-files -z --cached --others --exclude-standard | while IFS= read -r -d '' f; do [ ! -e "$f" ] || printf '%s\0' "$f"; done |
   tar --null -T - -cf - | tar -xf - -C "$tmp/p"
 cd "$tmp/p"
-git init -q -b main . && git add -A && git -c user.name=e2e -c user.email=e2e@example.invalid commit -q -m e2e
+git init -q -b main . && git add -A && git -c user.name=e2e -c user.email=e2e@e2e.invalid commit -q -m e2e
 
 at() { (cd "$1" && shift && "$@"); }
 tm() { at "stacks/$a" terramate run --no-tags state-backend "$@"; } # the account's stacks except the state-backends
