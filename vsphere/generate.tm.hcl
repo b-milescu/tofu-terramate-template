@@ -22,6 +22,11 @@ assert {
 }
 
 assert {
+  assertion = global.vsphere_allow_unverified_ssl == true || global.vsphere_allow_unverified_ssl == false
+  message   = "vsphere_allow_unverified_ssl must be the boolean true or false (stacks/<environment>/globals.tm.hcl)"
+}
+
+assert {
   assertion = tm_can(tm_regex("^https://[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:[0-9]{1,5})?(/[A-Za-z0-9._~-]+)*$", global.gitlab_url))
   message   = "gitlab_url must be https://<host>[:port][/path] without a trailing slash"
 }
@@ -29,6 +34,11 @@ assert {
 assert {
   assertion = tm_can(tm_regex("^[1-9][0-9]*$", global.gitlab_project_id))
   message   = "gitlab_project_id must be the numeric GitLab project id, not the project path"
+}
+
+assert {
+  assertion = !tm_anytrue([for name, p in global.extra_providers : tm_lower(name) == "vsphere" || tm_can(tm_regex("(?i)(^|/)vsphere$", tm_try(p.source, "")))])
+  message   = "extra_providers must not contain a vSphere provider (the key vsphere or a source ending in /vsphere): the vSphere provider is pinned by vsphere_provider_version"
 }
 
 # GitLab-managed state, one per stack and named by the stack id. lock_method and unlock_method are required: OpenTofu's
@@ -52,13 +62,14 @@ generate_hcl "_terramate_generated_backend.tf" {
   }
 }
 
-# vsphere_server and allow_unverified_ssl set here beat VSPHERE_SERVER and VSPHERE_ALLOW_UNVERIFIED_SSL in the
-# environment. Credentials come from VSPHERE_USER and VSPHERE_PASSWORD only.
+# vsphere_server and allow_unverified_ssl set here beat VSPHERE_SERVER and VSPHERE_ALLOW_UNVERIFIED_SSL in the environment, and
+# allow_unverified_ssl wins both ways: with vsphere_allow_unverified_ssl = true, exporting VSPHERE_ALLOW_UNVERIFIED_SSL=false does not
+# restore verification. Credentials come from VSPHERE_USER and VSPHERE_PASSWORD only.
 generate_hcl "_terramate_generated_provider.tf" {
   content {
     provider "vsphere" {
       vsphere_server       = global.vsphere_server
-      allow_unverified_ssl = false
+      allow_unverified_ssl = global.vsphere_allow_unverified_ssl
     }
   }
 }
@@ -68,11 +79,15 @@ generate_hcl "_terramate_generated_versions.tf" {
     terraform {
       required_version = global.opentofu_version
 
-      required_providers {
-        vsphere = {
-          source  = "vmware/vsphere"
-          version = global.vsphere_provider_version
-        }
+      # OpenTofu allows one required_providers block per module: a stack adds non-vSphere providers through
+      # global.extra_providers in its own globals.tm.hcl, never through a second block.
+      tm_dynamic "required_providers" {
+        attributes = tm_merge({
+          vsphere = {
+            source  = "vmware/vsphere"
+            version = global.vsphere_provider_version
+          }
+        }, global.extra_providers)
       }
     }
 

@@ -14,7 +14,7 @@ Project `.mcp.json`, lookup only:
 
 | Server | Use |
 |---|---|
-| `terraform` | Terraform registry: provider and module versions, resource schemas, docs. Versions and schemas come from it or the registries, never from memory |
+| `terraform-registry` | Terraform registry: provider and module versions, resource schemas, docs. Versions and schemas come from it or the registries, never from memory |
 | `aws-knowledge` | remote AWS-hosted server: reads and searches AWS documentation, regional availability, region lists, AWS skills. Your queries go to AWS: never put secrets or account data in them |
 
 - Never add credentials, `--profile`, TFE tokens or `ENABLE_TF_OPERATIONS` to the MCP config; keep `--toolsets=registry`. This project has no cloud-API MCP server: do not add one.
@@ -32,7 +32,7 @@ Edit `.tf`, `globals.tm.hcl` or `generate.tm.hcl` (run `terramate fmt` after edi
 
 - Never apply without a reviewed saved plan: `tofu plan -out=tfplan`, show it, then `tofu apply tfplan`. Never use `-auto-approve`.
 - Destroy only after `plan -destroy -out=tfplan` ran, every resource it deletes (including dependents pulled in through locals or `for_each`) was shown, and the user confirmed. Flip `protect_destroy` only in a reviewed change the user asked for. Never use `-target` or `-exclude`: both plan destroys past the `protect_destroy` guard (the refusal text itself suggests `-exclude`: do not follow it).
-- Checks never use cloud credentials: do not export cloud credentials, profiles or session tokens for hooks, `tofu test` or `tofu validate`; stacks are validated with `init -backend=false`.
+- Checks never use cloud credentials: do not export cloud credentials, profiles or session tokens for hooks, `tofu test` or `tofu validate`; stacks are validated with `init -backend=false`. Never read or print credential values, and never list the environment (`env`, `printenv`, `export`, `set`): the user's shell may hold them.
 - Never edit `_terramate_generated_*` files. Edit `generate.tm.hcl` or a `globals.tm.hcl`, run `make generate`, commit the result.
 - Never copy a stack id: ids are the state keys. Create stacks with `terramate create`; for copies strip the ids, then `make generate` ([README](README.md#grow-the-tree)).
 - `.tf` only: no `.tofu` files (tflint and checkov skip them silently).

@@ -86,21 +86,22 @@ repos:
           (?=.*^\s*unlock_method\s*=\s*"DELETE"\s*$)
           (?!.*^\s*(?:username|password|headers|skip_cert_verification|client_private_key_pem)\s*=)
       - id: generated-provider
-        name: generated provider keeps the pinned vCenter, verified TLS and no credentials
+        name: generated provider keeps the pinned vCenter, a literal TLS setting and no credentials
         language: pygrep
         args: [--multiline, --negate]
         files: (^|/)_terramate_generated_provider\.tf$
         entry: |-
           (?xs)\A
           (?=.*^\s*vsphere_server\s*=\s*"[a-z0-9][a-z0-9.-]*(:[0-9]{1,5})?"\s*$)
-          (?=.*^\s*allow_unverified_ssl\s*=\s*false\s*$)
+          (?=.*^\s*allow_unverified_ssl\s*=\s*(?:true|false)\s*$)
           (?!.*^\s*(?:user|password)\s*=)
-      # The generated files verify TLS (VSPHERE_ALLOW_UNVERIFIED_SSL loses against the generated false); this guards every other .tf:
+      # generated-provider owns the generated files under stacks/ (a literal true or false); this guards every other .tf:
       # an assignment that is not the literal false (true, a variable, a local) and a one-line block both fail, a comment line does not.
       - id: no-unverified-tls
-        name: no allow_unverified_ssl or skip_cert_verification other than false in any .tf
+        name: no allow_unverified_ssl or skip_cert_verification other than false in any .tf outside the generated providers
         language: pygrep
         files: \.tf$
+        exclude: ^stacks/.+/_terramate_generated_provider\.tf$
         entry: '^(?!\s*(?:#|//)).*\b(?:allow_unverified_ssl|skip_cert_verification)\s*=\s*(?=\S)(?!false\s*(?:$|[#}]|//))'
       # A module that requires hashicorp/vsphere, or names no source (which means hashicorp/vsphere), makes OpenTofu install a second
       # vsphere provider that is configured from VSPHERE_* alone: not the pinned vCenter, with TLS settings taken from the environment.
@@ -166,6 +167,8 @@ repos:
           - --hook-config=--tf-path=tofu
           - --hook-config=--parallelism-limit=1 # a failing init is otherwise retried 10x when TF_PLUGIN_CACHE_DIR is set
           - --tf-init-args=-lockfile=readonly
-          # validate makes no connection, but it fails on the generated provider block without credentials ("Missing required argument")
+          # validate makes no connection, but it fails on the generated provider block without credentials ("Missing required argument"),
+          # and so does a provider from extra_providers that needs credentials to validate: it gets its own --env-vars line, such as
+          # --env-vars=ROS_USERNAME=validate-placeholder for RouterOS
           - --env-vars=VSPHERE_USER=validate-placeholder
           - --env-vars=VSPHERE_PASSWORD=validate-placeholder

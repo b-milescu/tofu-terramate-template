@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "terraform": {
+    "terraform-registry": {
       "type": "stdio",
       "command": "env",
       "args": ["-u", "TFE_TOKEN", "-u", "TFE_ADDRESS", "HOME=/nonexistent",

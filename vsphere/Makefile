@@ -15,11 +15,14 @@ BREW = HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_INSTALL_CLE
 # Third-party code is fetched and built here, so TLS verification stays on whatever the user's git configuration
 # (http.sslVerify=false, unscoped or scoped to github.com) or GIT_SSL_NO_VERIFY say. Direct git calls get it with -c;
 # the git subprocesses of pre-commit read GIT_CONFIG_COUNT (git >= 2.31; pre-commit passes it on, but drops GIT_CONFIG_GLOBAL).
+# Not covered: Homebrew's tap clone (bin/brew runs env -i with an allowlist, so no GIT_* variable reaches its git).
 GIT_TLS = env -u GIT_SSL_NO_VERIFY git -c http.sslVerify=true -c http.https://github.com/.sslVerify=true
 FORCE_TLS = unset GIT_SSL_NO_VERIFY; n=$${GIT_CONFIG_COUNT:-0}; export GIT_CONFIG_COUNT=$$((n + 2)) "GIT_CONFIG_KEY_$$n=http.sslVerify" "GIT_CONFIG_VALUE_$$n=true" "GIT_CONFIG_KEY_$$((n + 1))=http.https://github.com/.sslVerify" "GIT_CONFIG_VALUE_$$((n + 1))=true";
 
-# The hook environments are built from third-party sources (pip, Go, gcc): no cloud variables and no tokens reach them.
-INSTALL_HOOKS = $(FORCE_TLS) unset "$${!AWS_@}" "$${!ARM_@}" "$${!AZURE_@}" "$${!AZD_@}" "$${!GOOGLE_@}" "$${!GCP_@}" "$${!CLOUDSDK_@}" "$${!VSPHERE_@}" "$${!GOVC_@}" "$${!TF_HTTP_@}" "$${!GITLAB_@}" GITHUB_TOKEN TENV_GITHUB_TOKEN GH_TOKEN HOMEBREW_GITHUB_API_TOKEN; pre-commit install-hooks
+# Third-party code runs under these targets (pre-commit hooks, tflint and its ruleset, provider binaries, pip, Go, gcc): no cloud, vSphere
+# or GitLab variable of those prefixes and none of TENV_GITHUB_TOKEN, GH_TOKEN, HOMEBREW_GITHUB_API_TOKEN reaches it; GITHUB_TOKEN stays: the terraform_tflint hook runs `tflint --init`, which reads it.
+SCRUB = unset "$${!AWS_@}" "$${!ARM_@}" "$${!AZURE_@}" "$${!AZD_@}" "$${!GOOGLE_@}" "$${!GCP_@}" "$${!CLOUDSDK_@}" "$${!VSPHERE_@}" "$${!GOVC_@}" "$${!TF_HTTP_@}" "$${!GITLAB_@}" TENV_GITHUB_TOKEN GH_TOKEN HOMEBREW_GITHUB_API_TOKEN;
+INSTALL_HOOKS = $(FORCE_TLS) $(SCRUB) unset GITHUB_TOKEN; pre-commit install-hooks
 
 # Template mode: this folder lies inside a git work tree whose top-level is another directory, so it is the template checkout and not
 # a project (a project is its own git root; outside git nothing changes). There generate, relock, skill and hooks refuse, because they
@@ -57,7 +60,7 @@ help: ## List the targets
 
 # pre-commit and tflint enforce their own minimum versions when they run (minimum_pre_commit_version, tflint required_version).
 doctor: ## Check the toolchain against the pins (installs nothing; non-zero exit on a missing or wrong tool)
-	@unset TF_PLUGIN_CACHE_DIR; export TENV_SKIP_LAST_USE=1 TFLINT_DISABLE_VERSION_CHECK=1; bad=0; \
+	@$(SCRUB) unset TF_PLUGIN_CACHE_DIR; export TENV_SKIP_LAST_USE=1 TFLINT_DISABLE_VERSION_CHECK=1; bad=0; \
 	ver() { local o; o=$$("$$@" 2>&1) || return 0; grep -Eo '[0-9]+(\.[0-9]+)+' <<<"$$o" | head -1; }; \
 	has() { command -v "$$1" >/dev/null 2>&1 || { echo "MISSING $$1"; bad=1; return 1; }; }; \
 	chk() { has "$$1" || return 0; v=$$(ver "$$1" --version); if [ -n "$$v" ]; then echo "ok $$1 $$v"; else echo "WRONG $$1 (no version)"; bad=1; fi; }; \
@@ -119,7 +122,7 @@ generate: ## Create missing stack ids, then regenerate the stack code (run after
 
 relock: ## Upgrade the provider lock files within the version constraints
 	@$(REFUSE)
-	@$(CACHE) terramate run --disable-safeguards=git --parallel 1 -- tofu init -backend=false -upgrade -input=false && \
+	@$(SCRUB) $(CACHE) terramate run --disable-safeguards=git --parallel 1 -- tofu init -backend=false -upgrade -input=false && \
 	for d in modules/*/; do [ -d "$$d" ] || continue; (cd "$$d" && tofu init -backend=false -upgrade -input=false) || exit 1; done
 
 # Hooks only see tracked files: on an untracked tree every hook skips and pre-commit exits 0.
@@ -127,14 +130,14 @@ _tracked:
 	@$(IN_TEMPLATE) || git ls-files --error-unmatch .pre-commit-config.yaml >/dev/null 2>&1 || { echo "nothing is tracked yet: run 'git add -A' first" >&2; exit 1; }
 
 check: _tracked ## Commit-stage hooks on every tracked file
-	@$(THROWAWAY); $(CACHE) pre-commit run --all-files
+	@$(SCRUB) $(THROWAWAY); $(CACHE) pre-commit run --all-files
 
 # One run: the pre-push stage holds every commit-stage hook too (default_stages in .pre-commit-config.yaml).
 check-all: _tracked ## Commit- and push-stage hooks on every tracked file
-	@$(THROWAWAY); $(CACHE) pre-commit run --all-files --hook-stage pre-push
+	@$(SCRUB) $(THROWAWAY); $(CACHE) pre-commit run --all-files --hook-stage pre-push
 
 test: _tracked ## tofu test of every module (mock providers, no credentials)
-	@$(THROWAWAY); $(CACHE) pre-commit run tofu-test --all-files --hook-stage pre-push
+	@$(SCRUB) $(THROWAWAY); $(CACHE) pre-commit run tofu-test --all-files --hook-stage pre-push
 
 e2e: ## Rehearse Operate and Destroy against vcsim and GitLab CE in Docker (about 3 minutes, never reaches a real vCenter or GitLab)
 	@$(THROWAWAY); $(SHELL) ./e2e.sh

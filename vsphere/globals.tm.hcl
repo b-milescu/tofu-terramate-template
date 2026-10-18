@@ -17,4 +17,13 @@ globals {
 
   # true adds a destroy guard to every stack of an environment (set in stacks/<environment>/globals.tm.hcl).
   protect_destroy = false
+
+  # false verifies the vCenter's certificate; true skips the check for a lab whose vCenter certificate comes from a CA that no
+  # operator machine trusts. Set it per environment in stacks/<environment>/globals.tm.hcl, only in a reviewed change.
+  vsphere_allow_unverified_ssl = false
+
+  # Non-vSphere providers of a stack, merged into its generated required_providers; a stack sets them in its own
+  # globals.tm.hcl as { <name> = { source = "<namespace>/<name>", version = "<constraint>" } }. Credentials come from
+  # each provider's environment variables only.
+  extra_providers = {}
 }

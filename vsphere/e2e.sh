@@ -9,8 +9,9 @@
 # tokens of the throwaway GitLab only, a gitignored e2e_override.tf per stack that points its backend and provider at loopback (random
 # ports, preflighted), a dead proxy for every other host (proven by a curl first and by two tofu drills during the run), and no Docker
 # socket or mount for the containers.
-# A third drill pins the TLS stance: with only vsphere_server redirected, the generated provider still verifies certificates and refuses
-# vcsim's even with VSPHERE_ALLOW_UNVERIFIED_SSL=true in the environment; only the loopback override turns verification off.
+# A third drill pins the TLS stance on the first stack whose generated provider verifies certificates (skipped when every stack sets
+# vsphere_allow_unverified_ssl = true): with only vsphere_server redirected, the provider still refuses vcsim's certificate even with
+# VSPHERE_ALLOW_UNVERIFIED_SSL=true in the environment; only the loopback override turns verification off.
 set -euo pipefail
 VCSIM_IMAGE=${E2E_VCSIM_IMAGE:-vmware/vcsim:v0.56.0} # linux/amd64 only, so it runs under emulation on arm64; "latest" is an older build
 GITLAB_IMAGE=${E2E_GITLAB_IMAGE:-gitlab/gitlab-ce:19.4.2-ce.0}
@@ -61,13 +62,18 @@ git ls-files -z --cached --others --exclude-standard | while IFS= read -r -d '' 
 cd "$tmp/p"
 git init -q -b main . && git add -A && git -c user.name=e2e -c user.email=e2e@e2e.invalid commit -q -m e2e
 
-all=$(terramate list | grep -E '^stacks/[^/]+/[^/]+/[^/]+' || true)
-[ -n "$all" ] || die "no stacks/<environment>/<datacenter>/<stack> in the project"
+# Only the folder stacks: workload stacks adopt VMs, templates and OVAs that vcsim does not have.
+all=$(terramate list --tags folder | grep -E '^stacks/[^/]+/[^/]+/[^/]+' || true)
+[ -n "$all" ] || die "no folder stack (tag folder) under stacks/<environment>/<datacenter>/ in the project"
 for s in $all; do
   for g in backend provider versions datacenter; do [ -f "$s/_terramate_generated_$g.tf" ] || die "$s has no generated $g file: run make generate"; done
   [ -f "$s/.terraform.lock.hcl" ] || die "$s has no .terraform.lock.hcl: run make relock (the init here would create it and terramate run stops on untracked files)"
 done
-first=${all%%$'\n'*}
+verified= # the TLS drill needs a stack that verifies certificates: the first one that does
+for s in $all; do
+  if grep -q '^ *allow_unverified_ssl *= *false' "$s/_terramate_generated_provider.tf"; then verified=$s; break; fi
+done
+first=${verified:-${all%%$'\n'*}} # else the first stack
 dcs=$(for s in $all; do sed -n 's/^ *name *= *\(".*"\).*/\1/p' "$s/_terramate_generated_datacenter.tf"; done | sort -u) # HCL string literals, quotes included
 
 # GitLab first, it needs about 2 minutes to boot. Trimmed for a test: one Puma process, no metrics, KAS, registry or usage ping (a sampled
@@ -83,7 +89,7 @@ glport=$(docker port "$gl" 80/tcp | sed -n '1s/.*://p')
 simport=$(docker port "$sim" 8989/tcp | sed -n '1s/.*://p')
 
 at() { (cd "$1" && shift && "$@"); }
-tm() { at "stacks/$e" terramate run "$@"; } # the environment's stacks
+tm() { at "stacks/$e" terramate run --tags folder "$@"; } # the environment's folder stacks
 val() { sed -n "s/^ *$2 *= *\"\(.*\)\".*/\1/p" "$1"; } # the quoted value of an attribute in an HCL file
 api() { curl -q -fsS -m 60 -H "PRIVATE-TOKEN: $pat" "http://127.0.0.1:$glport/api/v4/$1" "${@:2}"; }
 id() { sed -n 's/^{"id":\([0-9]*\),.*/\1/p' "$tmp/out"; } # the id of the object the last step created
@@ -146,7 +152,7 @@ ovr_backend() { # GitLab on loopback; same state name, lock paths and methods
 ovr_provider() { # vcsim; the certificate check goes off because the provider has no CA option and on macOS ignores SSL_CERT_FILE
   sed -e '/^\/\//d' -e "s/^\( *vsphere_server *= *\).*/\1\"127.0.0.1:$simport\"/" -e 's/^\( *allow_unverified_ssl *= *\)false/\1true/' "$1/_terramate_generated_provider.tf" >>"$1/e2e_override.tf"
   { grep -q "^ *vsphere_server *= *\"127.0.0.1:$simport\"" "$1/e2e_override.tf" && grep -q '^ *allow_unverified_ssl *= *true' "$1/e2e_override.tf"; } ||
-    die "$1: the generated provider has no vsphere_server and allow_unverified_ssl = false"
+    die "$1: the generated provider has no vsphere_server or allow_unverified_ssl"
 }
 
 # drill: with only the backend redirected, the provider still addresses the stack's vCenter host and must die at the proxy
@@ -157,12 +163,16 @@ step "tripwire drill: no provider override dies at the proxy" "proxyconnect" at 
 grep -qF "$vc" "$tmp/out" || die "the drill did not reach for $vc"
 
 # drill: with the server redirected too, the generated allow_unverified_ssl = false still beats VSPHERE_ALLOW_UNVERIFIED_SSL=true in the
-# environment (an argument in code wins over the variable), so the plan must fail on vcsim's self-signed certificate
-printf 'provider "vsphere" {\n  vsphere_server = "127.0.0.1:%s"\n}\n' "$simport" >>"$first/e2e_override.tf"
-VSPHERE_ALLOW_UNVERIFIED_SSL=true step "TLS drill: the generated provider refuses vcsim's certificate even with VSPHERE_ALLOW_UNVERIFIED_SSL=true" "x509:" at "$first" tofu plan -no-color
-grep -qF "127.0.0.1:$simport" "$tmp/out" || die "the drill did not reach vcsim"
+# environment (an argument in code wins over the variable), so the plan must fail on vcsim's self-signed certificate.
+if [ -n "$verified" ]; then
+  printf 'provider "vsphere" {\n  vsphere_server = "127.0.0.1:%s"\n}\n' "$simport" >>"$first/e2e_override.tf"
+  VSPHERE_ALLOW_UNVERIFIED_SSL=true step "TLS drill: the generated provider refuses vcsim's certificate even with VSPHERE_ALLOW_UNVERIFIED_SSL=true" "x509:" at "$first" tofu plan -no-color
+  grep -qF "127.0.0.1:$simport" "$tmp/out" || die "the drill did not reach vcsim"
+else
+  echo "  --   TLS drill skipped: every stack sets vsphere_allow_unverified_ssl = true"
+fi
 
-# the full overrides of every stack; the first one replaces the file the drill wrote
+# the full overrides of every stack; the one of $first replaces the file the drill wrote
 for s in $all; do
   ovr_backend "$s"
   ovr_provider "$s"
