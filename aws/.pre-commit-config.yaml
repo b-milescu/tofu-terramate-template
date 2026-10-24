@@ -69,7 +69,7 @@ repos:
         args: [--multiline, --negate]
         files: (^|/)_terramate_generated_versions\.tf$
         entry: '(?s)\A(?=.*^language\s*\{\s*compatible_with\s*\{\s*opentofu\s*=\s*"[^"]+")'
-      # AWS attributes: adapt both regexes when copying to azure/ or gcp/
+      # AWS attributes: adapt both regexes when copying to another provider
       - id: generated-backend
         name: generated backend keeps encryption with the state CMK, locking, account pinning and the stack-id key
         language: pygrep
