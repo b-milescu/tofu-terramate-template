@@ -95,8 +95,8 @@ repos:
         files: (^|/)modules/.+\.(tf|tftest\.hcl|terraform\.lock\.hcl)$
         entry: |
           bash -c '
-          unset "${!AWS_@}" "${!ARM_@}" "${!AZURE_@}" "${!AZD_@}" "${!GOOGLE_@}" "${!GCP_@}" "${!CLOUDSDK_@}" "${!VSPHERE_@}" "${!GOVC_@}" "${!TF_HTTP_@}" "${!GITLAB_@}" # no cloud credentials
-          export AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_EC2_METADATA_DISABLED=true
+          unset "${!AWS_@}" "${!ARM_@}" "${!AZURE_@}" "${!AZD_@}" "${!MSI_@}" "${!IDENTITY_@}" "${!ACTIONS_ID_TOKEN_REQUEST_@}" "${!GOOGLE_@}" "${!GCLOUD_@}" "${!GCP_@}" "${!CLOUDSDK_@}" "${!VSPHERE_@}" "${!GOVC_@}" "${!TF_HTTP_@}" "${!GITLAB_@}" SYSTEM_ACCESSTOKEN CI_JOB_TOKEN CI_JOB_JWT CI_JOB_JWT_V2 CI_REGISTRY_PASSWORD # no cloud or CI credentials
+          export AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_EC2_METADATA_DISABLED=true GOOGLE_APPLICATION_CREDENTIALS=/dev/null # the gcloud ADC file sits in ~/.config/gcloud whatever CLOUDSDK_CONFIG says
           iso=$(mktemp -d); trap "rm -rf \"$iso\"" EXIT # az and gcloud keep their login sessions in config dirs, not in the environment
           export AZURE_CONFIG_DIR="$iso" AZD_CONFIG_DIR="$iso" CLOUDSDK_CONFIG="$iso"
           export TF_PLUGIN_CACHE_DIR=${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}; mkdir -p "$TF_PLUGIN_CACHE_DIR"

@@ -19,9 +19,10 @@ BREW = HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_INSTALL_CLE
 GIT_TLS = env -u GIT_SSL_NO_VERIFY git -c http.sslVerify=true -c http.https://github.com/.sslVerify=true
 FORCE_TLS = unset GIT_SSL_NO_VERIFY; n=$${GIT_CONFIG_COUNT:-0}; export GIT_CONFIG_COUNT=$$((n + 2)) "GIT_CONFIG_KEY_$$n=http.sslVerify" "GIT_CONFIG_VALUE_$$n=true" "GIT_CONFIG_KEY_$$((n + 1))=http.https://github.com/.sslVerify" "GIT_CONFIG_VALUE_$$((n + 1))=true";
 
-# Third-party code runs under these targets (pre-commit hooks, tflint and its ruleset, provider binaries, pip, Go, gcc): no cloud, vSphere
-# or GitLab variable of those prefixes and none of TENV_GITHUB_TOKEN, GH_TOKEN, HOMEBREW_GITHUB_API_TOKEN reaches it; GITHUB_TOKEN stays: the terraform_tflint hook runs `tflint --init`, which reads it.
-SCRUB = unset "$${!AWS_@}" "$${!ARM_@}" "$${!AZURE_@}" "$${!AZD_@}" "$${!GOOGLE_@}" "$${!GCP_@}" "$${!CLOUDSDK_@}" "$${!VSPHERE_@}" "$${!GOVC_@}" "$${!TF_HTTP_@}" "$${!GITLAB_@}" TENV_GITHUB_TOKEN GH_TOKEN HOMEBREW_GITHUB_API_TOKEN;
+# Third-party code runs under these targets (pre-commit hooks, tflint and its ruleset, provider binaries, pip, Go, gcc): no cloud, vSphere,
+# GitLab or CI identity variable of those prefixes and none of SYSTEM_ACCESSTOKEN, CI_JOB_TOKEN, CI_JOB_JWT, CI_JOB_JWT_V2, CI_REGISTRY_PASSWORD,
+# TENV_GITHUB_TOKEN, GH_TOKEN, HOMEBREW_GITHUB_API_TOKEN reaches it; GITHUB_TOKEN stays: the terraform_tflint hook runs `tflint --init`, which reads it.
+SCRUB = unset "$${!AWS_@}" "$${!ARM_@}" "$${!AZURE_@}" "$${!AZD_@}" "$${!MSI_@}" "$${!IDENTITY_@}" "$${!ACTIONS_ID_TOKEN_REQUEST_@}" "$${!GOOGLE_@}" "$${!GCLOUD_@}" "$${!GCP_@}" "$${!CLOUDSDK_@}" "$${!VSPHERE_@}" "$${!GOVC_@}" "$${!TF_HTTP_@}" "$${!GITLAB_@}" SYSTEM_ACCESSTOKEN CI_JOB_TOKEN CI_JOB_JWT CI_JOB_JWT_V2 CI_REGISTRY_PASSWORD TENV_GITHUB_TOKEN GH_TOKEN HOMEBREW_GITHUB_API_TOKEN;
 INSTALL_HOOKS = $(FORCE_TLS) $(SCRUB) unset GITHUB_TOKEN; pre-commit install-hooks
 
 # Template mode: this folder lies inside a git work tree whose top-level is another directory, so it is the template checkout and not
