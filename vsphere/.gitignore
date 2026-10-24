@@ -1,6 +1,5 @@
 # OpenTofu working files. .terraform.lock.hcl IS committed, for stacks and modules alike.
 .terraform/
-.terraform.tfstate.lock.info
 *.tfstate
 *.tfstate.*
 *.tfplan

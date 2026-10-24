@@ -83,7 +83,7 @@ generate_hcl "_terramate_generated_versions.tf" {
 }
 
 # Every stack gets its location and tags as locals: the azurerm provider has no default tags, so each resource that takes tags
-# passes tags = local.tags. tflint (terraform_unused_declarations) flags a stack that uses neither.
+# passes tags = local.tags. tflint (terraform_unused_declarations) flags each of the two that a stack leaves unused.
 generate_hcl "_terramate_generated_locals.tf" {
   content {
     locals {

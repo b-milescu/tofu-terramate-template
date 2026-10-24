@@ -13,7 +13,7 @@
 # vsphere_allow_unverified_ssl = true): with only vsphere_server redirected, the provider still refuses vcsim's certificate even with
 # VSPHERE_ALLOW_UNVERIFIED_SSL=true in the environment; only the loopback override turns verification off.
 set -euo pipefail
-VCSIM_IMAGE=${E2E_VCSIM_IMAGE:-vmware/vcsim:v0.56.0} # linux/amd64 only, so it runs under emulation on arm64; "latest" is an older build
+VCSIM_IMAGE=${E2E_VCSIM_IMAGE:-vmware/vcsim:v0.56.0} # linux/amd64 only, so it runs under emulation on arm64
 GITLAB_IMAGE=${E2E_GITLAB_IMAGE:-gitlab/gitlab-ce:19.4.2-ce.0}
 V=${E2E_VERBOSE:-} # 1: also stream every step's output live (it is logged either way); any other value: off
 
@@ -101,7 +101,7 @@ for _ in $(seq 60); do simup && break; sleep 0.5; done
 simup || die "vcsim does not answer at 127.0.0.1:$simport"
 mkdir "$tmp/dc"
 cp "$first/_terramate_generated_versions.tf" "$tmp/dc/"
-[ ! -f "$first/.terraform.lock.hcl" ] || cp "$first/.terraform.lock.hcl" "$tmp/dc/"
+cp "$first/.terraform.lock.hcl" "$tmp/dc/"
 {
   printf 'provider "vsphere" {\n  vsphere_server       = "127.0.0.1:%s"\n  allow_unverified_ssl = true\n}\n' "$simport"
   n=0

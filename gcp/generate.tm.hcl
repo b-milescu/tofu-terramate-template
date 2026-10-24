@@ -18,7 +18,7 @@ assert {
 
 assert {
   assertion = tm_length(global.state_bucket) <= 63 && !tm_can(tm_regex("^goog|g[o0][o0]gle", global.state_bucket))
-  message   = "state bucket name <project>-tfstate-<project_id>-<region> must be at most 63 characters and must neither start with goog nor contain google: shorten or rename project"
+  message   = "state bucket name <project>-tfstate-<project_id>-<region> must be at most 63 characters and must neither start with goog nor contain google or a lookalike such as g00gle: shorten or rename project"
 }
 
 assert {

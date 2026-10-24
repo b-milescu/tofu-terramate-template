@@ -56,7 +56,7 @@ repos:
           out=$(terramate generate --detailed-exit-code 2>&1); g=$?; [ -z "$out" ] || printf "%s\n" "$out" >&2
           [ $g -eq 0 ] || rc=1                            # exit 2 = wrote stale, hand-edited or new generated files
           [ $g -ne 1 ] || ! grep -q "named .id." <<<"$out" || echo "hint: run \"make generate\" (creates missing stack ids, then regenerates)" >&2
-          err=$(terramate list --run-order 2>&1 >/dev/null) || rc=1 # duplicate stack ids, cycles, failed asserts
+          err=$(terramate list --run-order 2>&1 >/dev/null) || rc=1 # duplicate stack ids, cycles
           [ -z "$err" ] || { printf "%s\n" "$err" >&2; rc=1; }      # a typo in after/before is only a warning
           stacks=$(terramate list) && [ -n "$stacks" ] || { echo "no stacks found" >&2; rc=1; }
           for s in $stacks; do for f in backend provider versions locals; do
