@@ -125,7 +125,7 @@ generate: ## Create missing stack ids, then regenerate the stack code (run after
 relock: ## Upgrade the provider lock files within the version constraints
 	@$(REFUSE)
 	@$(SCRUB) $(FORCE_TLS) $(CACHE) terramate run --disable-safeguards=git --parallel 1 -- tofu init -backend=false -upgrade -input=false && \
-	for d in modules/*/; do (cd "$$d" && tofu init -backend=false -upgrade -input=false) || exit 1; done
+	for d in modules/*/; do [ -d "$$d" ] || continue; (cd "$$d" && tofu init -backend=false -upgrade -input=false) || exit 1; done
 
 # Hooks only see tracked files: an untracked file is skipped and pre-commit still exits 0.
 _tracked:
