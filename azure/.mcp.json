@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "terraform-registry": {
+      "type": "stdio",
+      "command": "env",
+      "args": ["-u", "TFE_TOKEN", "-u", "TFE_ADDRESS", "HOME=/nonexistent",
+               "terraform-mcp-server", "stdio", "--toolsets=registry", "--log-level=error"]
+    },
+    "microsoft-learn": {
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp"
+    }
+  }
+}

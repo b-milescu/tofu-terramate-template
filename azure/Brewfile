@@ -1,0 +1,12 @@
+# Toolchain for `make setup`: macOS 15+ on Apple Silicon, Linux x86_64/arm64 with glibc, WSL2.
+# Everything here is installed at its newest release (Homebrew cannot pin versions).
+# OpenTofu and Terramate are the pinned tools: `.tool-versions` (tenv).
+# No Azure CLI: no hook, test or doctor check calls it. `az login` is the local sign-in for the bootstrap and day-to-day runs (README).
+tap "terraform-linters/tap"            # tflint left homebrew-core in 2026-05; `make setup` trusts its cask first
+brew "tenv"                            # tofu and terramate shims
+brew "pre-commit"
+brew "terraform-docs"
+brew "trivy"
+brew "checkov"                         # terraform_checkov hook runs the system checkov, no hook-managed Python environment
+brew "terraform-mcp-server"            # Terraform registry lookups for the agent (.mcp.json)
+cask "terraform-linters/tap/tflint"    # fully qualified: short cask names are skipped on Linux
