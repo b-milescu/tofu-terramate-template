@@ -122,7 +122,7 @@ for d in stacks/*/; do
   fi
   AWS_ACCESS_KEY_ID=$OTHER step "$a the backend refuses another account" "Invalid account ID" at "$first" tofu plan -no-color
   lock "$first"
-  if [ -f "$first/_terramate_generated_destroy_guard.tf" ]; then # protect_destroy is set for this account
+  if [ -f "$first/_terramate_generated_destroy_guard.tf" ]; then # protect_destroy is true for this account
     step "$a destroy is blocked by the guard" "Resource instance terraform_data.destroy_guard has prevent_destroy" tm --reverse -- tofu plan -destroy -no-color -out=tfplan
   elif [ -n "$work" ]; then
     step "$a destroy plan" - tm --reverse -- tofu plan -destroy -out=tfplan

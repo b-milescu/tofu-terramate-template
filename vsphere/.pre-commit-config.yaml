@@ -86,7 +86,7 @@ repos:
           (?=.*^\s*unlock_method\s*=\s*"DELETE"\s*$)
           (?!.*^\s*(?:username|password|headers|skip_cert_verification|client_private_key_pem)\s*=)
       - id: generated-provider
-        name: generated provider keeps the pinned vCenter, a literal TLS setting and no credentials
+        name: generated provider keeps the pinned vCenter, a literal TLS setting, client_debug = false and no credentials
         language: pygrep
         args: [--multiline, --negate]
         files: (^|/)_terramate_generated_provider\.tf$
@@ -94,6 +94,7 @@ repos:
           (?xs)\A
           (?=.*^\s*vsphere_server\s*=\s*"[a-z0-9][a-z0-9.-]*(:[0-9]{1,5})?"\s*$)
           (?=.*^\s*allow_unverified_ssl\s*=\s*(?:true|false)\s*$)
+          (?=.*^\s*client_debug\s*=\s*false\s*$)
           (?!.*^\s*(?:user|password)\s*=)
       # generated-provider owns the generated files under stacks/ (a literal true or false); this guards every other .tf:
       # an assignment that is not the literal false (true, a variable, a local) and a one-line block both fail, a comment line does not.
@@ -103,6 +104,13 @@ repos:
         files: \.tf$
         exclude: ^stacks/.+/_terramate_generated_provider\.tf$
         entry: '^(?!\s*(?:#|//)).*\b(?:allow_unverified_ssl|skip_cert_verification)\s*=\s*(?=\S)(?!false\s*(?:$|[#}]|//))'
+      # Same hazard as vsphere-provider-source below, through a hand-written block (an alias for another vCenter).
+      - id: vsphere-provider-block
+        name: no provider "vsphere" block outside the generated providers
+        language: pygrep
+        files: \.tf$
+        exclude: ^stacks/.+/_terramate_generated_provider\.tf$
+        entry: '^\s*provider\s*"vsphere"'
       # A module that requires hashicorp/vsphere, or names no source (which means hashicorp/vsphere), makes OpenTofu install a second
       # vsphere provider that is configured from VSPHERE_* alone: not the pinned vCenter, with TLS settings taken from the environment.
       - id: vsphere-provider-source
@@ -111,10 +119,10 @@ repos:
         files: (^|/)\.terraform\.lock\.hcl$
         entry: '^provider\s+"(?!registry\.[^"/]+/vmware/vsphere")[^"]*/vsphere"'
       - id: forbidden-files
-        name: no state, plans, provider caches, override files or .tofu files in git
+        name: no state, plans, provider caches, override files, .tofu or .tf.json files in git
         language: fail
-        entry: "never commit state, plans, crash logs, .terraform/ or override.tf files (they silently replace the generated backend and provider); write .tf (tflint silently skips .tofu)"
-        files: \.tfstate(\.[^/]*)?$|(^|/)(tfplan|[^/]*\.tfplan)$|(^|/)\.terraform/|(^|/)crash[^/]*\.log$|\.tofu(\.json)?$|\.tofutest\.hcl$|(^|/)([^/]*_)?override\.tf(\.json)?$
+        entry: "never commit state, plans, crash logs, .terraform/ or override.tf files (they silently replace the generated backend and provider); write .tf (tflint silently skips .tofu; the vsphere guards read HCL only, not .tf.json)"
+        files: \.tfstate(\.[^/]*)?$|(^|/)(tfplan|[^/]*\.tfplan)$|(^|/)\.terraform/|(^|/)crash[^/]*\.log$|\.tofu(\.json)?$|\.tofutest\.hcl$|(^|/)([^/]*_)?override\.tf(\.json)?$|\.tf\.json$
       - id: tofu-test # before terraform_validate: inits each module once, so a cold module validates without a retry
         name: tofu test (every module, mock providers)
         language: unsupported
@@ -123,7 +131,7 @@ repos:
         files: (^|/)modules/.+\.(tf|tftest\.hcl|terraform\.lock\.hcl)$
         entry: |
           bash -c '
-          unset "${!AWS_@}" "${!ARM_@}" "${!AZURE_@}" "${!AZD_@}" "${!MSI_@}" "${!IDENTITY_@}" "${!ACTIONS_ID_TOKEN_REQUEST_@}" "${!GOOGLE_@}" "${!GCLOUD_@}" "${!GCP_@}" "${!CLOUDSDK_@}" "${!VSPHERE_@}" "${!GOVC_@}" "${!TF_HTTP_@}" "${!GITLAB_@}" SYSTEM_ACCESSTOKEN CI_JOB_TOKEN CI_JOB_JWT CI_JOB_JWT_V2 CI_REGISTRY_PASSWORD # no cloud or CI credentials
+          unset "${!AWS_@}" "${!ARM_@}" "${!AZURE_@}" "${!AZD_@}" "${!MSI_@}" "${!IDENTITY_@}" "${!ACTIONS_ID_TOKEN_REQUEST_@}" "${!GOOGLE_@}" "${!GCLOUD_@}" "${!GCP_@}" "${!CLOUDSDK_@}" "${!VSPHERE_@}" "${!GOVC_@}" "${!TF_HTTP_@}" "${!TF_VAR_@}" "${!GITLAB_@}" SYSTEM_ACCESSTOKEN CI_JOB_TOKEN CI_JOB_JWT CI_JOB_JWT_V2 CI_REGISTRY_PASSWORD TF_ENCRYPTION # no cloud or CI credentials
           export AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_EC2_METADATA_DISABLED=true GOOGLE_APPLICATION_CREDENTIALS=/dev/null # the gcloud ADC file sits in ~/.config/gcloud whatever CLOUDSDK_CONFIG says
           iso=$(mktemp -d); trap "rm -rf \"$iso\"" EXIT # az and gcloud keep their login sessions in config dirs, not in the environment
           export AZURE_CONFIG_DIR="$iso" AZD_CONFIG_DIR="$iso" CLOUDSDK_CONFIG="$iso"

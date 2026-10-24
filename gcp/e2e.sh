@@ -151,7 +151,7 @@ for d in stacks/*/; do
     [ -n "${drilled:-}" ] || { drilled=1; step "tripwire drill: no compute endpoint override dies at the proxy" "proxyconnect tcp" tm -- env -u GOOGLE_COMPUTE_CUSTOM_ENDPOINT tofu plan -no-color; }
   fi
   lock "$first"
-  if [ -f "$first/_terramate_generated_destroy_guard.tf" ]; then # protect_destroy is set for this environment
+  if [ -f "$first/_terramate_generated_destroy_guard.tf" ]; then # protect_destroy is true for this environment
     step "$a destroy is blocked by the guard" "Resource instance terraform_data.destroy_guard has prevent_destroy" tm --reverse -- tofu plan -destroy -no-color -out=tfplan
   elif [ -n "$work" ]; then
     step "$a destroy plan" - tm --reverse -- tofu plan -destroy -out=tfplan

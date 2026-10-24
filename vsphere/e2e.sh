@@ -207,7 +207,7 @@ for e in $envs; do
   TF_HTTP_USERNAME=outsider TF_HTTP_PASSWORD=$outsider step "$e a token without membership is refused at the lock" "Unexpected HTTP response code 404" at "$lead" tofu plan -no-color
   guarded=
   for s in $stacks; do [ ! -f "$s/_terramate_generated_destroy_guard.tf" ] || guarded=1; done
-  if [ -n "$guarded" ]; then # protect_destroy is set for this environment
+  if [ -n "$guarded" ]; then # protect_destroy is true for this environment
     step "$e destroy is blocked by the guard" "Resource instance terraform_data.destroy_guard has prevent_destroy" tm --reverse -- tofu plan -destroy -no-color -out=tfplan
   else
     step "$e destroy plan" - tm --reverse -- tofu plan -destroy -out=tfplan

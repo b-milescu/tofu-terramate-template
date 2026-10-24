@@ -89,7 +89,8 @@ generate_hcl "_terramate_generated_state_backend.tf" {
   }
 }
 
-# Blocks `tofu destroy` (and `plan -destroy`) of whole stacks in protected environments.
+# Blocks `tofu destroy` (and `plan -destroy`) of whole stacks in protected environments. Every stacks/<environment>/globals.tm.hcl sets
+# protect_destroy (true or false): a missing or misspelt key fails on the condition below.
 generate_hcl "_terramate_generated_destroy_guard.tf" {
   condition = global.protect_destroy
 

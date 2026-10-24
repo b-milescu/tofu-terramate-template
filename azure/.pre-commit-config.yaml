@@ -72,8 +72,10 @@ repos:
       # The two regexes below name the attributes generate.tm.hcl writes: change them together with the generators.
       # Credentials come from az login or ARM_* variables only. No tenant_id (with subscription_id the az CLI token request fails), and no
       # access_key or sas_token: the state account has no shared keys, so a stray ARM_ACCESS_KEY fails with 403 instead of being used.
+      # Neither block names another identity or cloud: no client_*, oidc_* or msi_* attribute, no use_msi, use_cli or use_oidc, no environment
+      # and no metadata_host (only the Azure public cloud is covered). Only the backend refuses tenant_id: the provider block may carry it.
       - id: generated-backend
-        name: generated backend keeps the pinned subscription, Entra ID auth, the stack-id key and no credentials
+        name: generated backend keeps the pinned subscription, Entra ID auth, the stack-id key and no credentials or cloud selectors
         language: pygrep
         args: [--multiline, --negate]
         files: (^|/)_terramate_generated_backend\.tf$
@@ -82,10 +84,10 @@ repos:
           (?=.*^\s*subscription_id\s*=\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"\s*$)
           (?=.*^\s*use_azuread_auth\s*=\s*true\s*$)
           (?=.*^\s*key\s*=\s*"stacks/[0-9a-f-]{36}/tofu\.tfstate"\s*$)
-          (?!.*^\s*(?:tenant_id|access_key|sas_token|client_secret|client_certificate|client_certificate_password|oidc_token|oidc_request_token)\s*=)
+          (?!.*^\s*(?:tenant_id|access_key|sas_token|client_|oidc_|msi_|use_(?:msi|cli|oidc)|environment|metadata_host)\w*\s*=)
       # The subscription pinned in the provider block is the guard against a foreign subscription: the provider has no allow-list of them.
       - id: generated-provider
-        name: generated provider keeps the pinned subscription, features and no credentials
+        name: generated provider keeps the pinned subscription, features and no credentials or cloud selectors
         language: pygrep
         args: [--multiline, --negate]
         files: (^|/)_terramate_generated_provider\.tf$
@@ -93,12 +95,18 @@ repos:
           (?xs)\A
           (?=.*^[ ]{2}subscription_id\s*=\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"\s*$)
           (?=.*^[ ]{2}features\s*\{)
-          (?!.*^\s*(?:client_secret|client_certificate|client_certificate_password|oidc_token|oidc_request_token)\s*=)
+          (?!.*^\s*(?:client_|oidc_|msi_|use_(?:msi|cli|oidc)|environment|metadata_host)\w*\s*=)
       - id: forbidden-files
         name: no state, plans, provider caches, override files or .tofu files in git
         language: fail
         entry: "never commit state, plans, crash logs, .terraform/ or override.tf files (they silently replace the generated backend and provider; the bootstrap's backend_override.tf is gitignored); write .tf (tflint and checkov silently skip .tofu)"
         files: \.tfstate(\.[^/]*)?$|(^|/)(tfplan|[^/]*\.tfplan)$|(^|/)\.terraform/|(^|/)crash[^/]*\.log$|\.tofu(\.json)?$|\.tofutest\.hcl$|(^|/)([^/]*_)?override\.tf(\.json)?$
+      - id: module-prevent-destroy
+        name: "state-backend keeps its 3 prevent_destroy = true lines (resource group, account and container): never lower the count just to pass this hook"
+        language: pygrep
+        args: [--multiline, --negate]
+        files: ^modules/state-backend/main\.tf$
+        entry: '(?s)\A(?:.*?^[ \t]*prevent_destroy[ \t]*=[ \t]*true[ \t\r]*(?:#|//|$)){3}'
       - id: tofu-test # before terraform_validate: inits each module once, so a cold module validates without a retry
         name: tofu test (every module, mock providers)
         language: unsupported
@@ -107,7 +115,7 @@ repos:
         files: (^|/)modules/.+\.(tf|tftest\.hcl|terraform\.lock\.hcl)$
         entry: |
           bash -c '
-          unset "${!AWS_@}" "${!ARM_@}" "${!AZURE_@}" "${!AZD_@}" "${!MSI_@}" "${!IDENTITY_@}" "${!ACTIONS_ID_TOKEN_REQUEST_@}" "${!GOOGLE_@}" "${!GCLOUD_@}" "${!GCP_@}" "${!CLOUDSDK_@}" "${!VSPHERE_@}" "${!GOVC_@}" "${!TF_HTTP_@}" "${!GITLAB_@}" SYSTEM_ACCESSTOKEN CI_JOB_TOKEN CI_JOB_JWT CI_JOB_JWT_V2 CI_REGISTRY_PASSWORD # no cloud or CI credentials
+          unset "${!AWS_@}" "${!ARM_@}" "${!AZURE_@}" "${!AZD_@}" "${!MSI_@}" "${!IDENTITY_@}" "${!ACTIONS_ID_TOKEN_REQUEST_@}" "${!GOOGLE_@}" "${!GCLOUD_@}" "${!GCP_@}" "${!CLOUDSDK_@}" "${!VSPHERE_@}" "${!GOVC_@}" "${!TF_HTTP_@}" "${!TF_VAR_@}" "${!GITLAB_@}" SYSTEM_ACCESSTOKEN CI_JOB_TOKEN CI_JOB_JWT CI_JOB_JWT_V2 CI_REGISTRY_PASSWORD TF_ENCRYPTION # no cloud or CI credentials
           export AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_EC2_METADATA_DISABLED=true GOOGLE_APPLICATION_CREDENTIALS=/dev/null # the gcloud ADC file sits in ~/.config/gcloud whatever CLOUDSDK_CONFIG says
           iso=$(mktemp -d); trap "rm -rf \"$iso\"" EXIT # az and gcloud keep their login sessions in config dirs, not in the environment
           export AZURE_CONFIG_DIR="$iso" AZD_CONFIG_DIR="$iso" CLOUDSDK_CONFIG="$iso"

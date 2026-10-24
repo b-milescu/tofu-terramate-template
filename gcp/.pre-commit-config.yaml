@@ -99,6 +99,12 @@ repos:
         language: fail
         entry: "never commit state, plans, crash logs, .terraform/ or override.tf files (they silently replace the generated backend and provider; the bootstrap's backend_override.tf is gitignored); write .tf (tflint and checkov silently skip .tofu)"
         files: \.tfstate(\.[^/]*)?$|(^|/)(tfplan|[^/]*\.tfplan)$|(^|/)\.terraform/|(^|/)crash[^/]*\.log$|\.tofu(\.json)?$|\.tofutest\.hcl$|(^|/)([^/]*_)?override\.tf(\.json)?$
+      - id: module-prevent-destroy
+        name: "state-backend keeps its 3 prevent_destroy = true lines (key ring, key and bucket): never lower the count just to pass this hook"
+        language: pygrep
+        args: [--multiline, --negate]
+        files: ^modules/state-backend/main\.tf$
+        entry: '(?s)\A(?:.*?^[ \t]*prevent_destroy[ \t]*=[ \t]*true[ \t\r]*(?:#|//|$)){3}'
       - id: tofu-test # before terraform_validate: inits each module once, so a cold module validates without a retry
         name: tofu test (every module, mock providers)
         language: unsupported
@@ -107,7 +113,7 @@ repos:
         files: (^|/)modules/.+\.(tf|tftest\.hcl|terraform\.lock\.hcl)$
         entry: |
           bash -c '
-          unset "${!AWS_@}" "${!ARM_@}" "${!AZURE_@}" "${!AZD_@}" "${!MSI_@}" "${!IDENTITY_@}" "${!ACTIONS_ID_TOKEN_REQUEST_@}" "${!GOOGLE_@}" "${!GCLOUD_@}" "${!GCP_@}" "${!CLOUDSDK_@}" "${!VSPHERE_@}" "${!GOVC_@}" "${!TF_HTTP_@}" "${!GITLAB_@}" SYSTEM_ACCESSTOKEN CI_JOB_TOKEN CI_JOB_JWT CI_JOB_JWT_V2 CI_REGISTRY_PASSWORD # no cloud or CI credentials
+          unset "${!AWS_@}" "${!ARM_@}" "${!AZURE_@}" "${!AZD_@}" "${!MSI_@}" "${!IDENTITY_@}" "${!ACTIONS_ID_TOKEN_REQUEST_@}" "${!GOOGLE_@}" "${!GCLOUD_@}" "${!GCP_@}" "${!CLOUDSDK_@}" "${!VSPHERE_@}" "${!GOVC_@}" "${!TF_HTTP_@}" "${!TF_VAR_@}" "${!GITLAB_@}" SYSTEM_ACCESSTOKEN CI_JOB_TOKEN CI_JOB_JWT CI_JOB_JWT_V2 CI_REGISTRY_PASSWORD TF_ENCRYPTION # no cloud or CI credentials
           export AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_EC2_METADATA_DISABLED=true GOOGLE_APPLICATION_CREDENTIALS=/dev/null # the gcloud ADC file sits in ~/.config/gcloud whatever CLOUDSDK_CONFIG says
           iso=$(mktemp -d); trap "rm -rf \"$iso\"" EXIT # az and gcloud keep their login sessions in config dirs, not in the environment
           export AZURE_CONFIG_DIR="$iso" AZD_CONFIG_DIR="$iso" CLOUDSDK_CONFIG="$iso"

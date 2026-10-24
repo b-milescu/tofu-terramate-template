@@ -1,4 +1,4 @@
-# Project-wide globals. Directories below add to or override them (stacks/<environment>/globals.tm.hcl: vsphere_server).
+# Project-wide globals. Directories below add to or override them (stacks/<environment>/globals.tm.hcl: vsphere_server, and protect_destroy: true adds a destroy guard to every stack of the environment).
 globals {
   # Prefix of the VM folder <project>-<environment>. The RUNBOOK sets it.
   project                  = "example"
@@ -14,9 +14,6 @@ globals {
   # survives a project rename (a path-form address fails writes with 405 after one); a transfer was not tried.
   gitlab_url        = "https://gitlab.example.com"
   gitlab_project_id = "1111111111"
-
-  # true adds a destroy guard to every stack of an environment (set in stacks/<environment>/globals.tm.hcl).
-  protect_destroy = false
 
   # false verifies the vCenter's certificate; true skips the check for a lab whose vCenter certificate comes from a CA that no
   # operator machine trusts. Set it per environment in stacks/<environment>/globals.tm.hcl, only in a reviewed change.

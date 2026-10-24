@@ -385,5 +385,5 @@ Claude Code, when chosen:
 
 ```bash
 cd "${T:?}" && { [ -e CLAUDE.md ] || printf '@AGENTS.md\n' > CLAUDE.md; } && { [ "$(cat CLAUDE.md)" = '@AGENTS.md' ] || echo "ASK: CLAUDE.md exists and differs"; }
-cd "${T:?}" && mkdir -p .claude/skills && ln -sfn ../../.agents/skills/terraform-skill .claude/skills/terraform-skill
+cd "${T:?}" && mkdir -p .claude/skills && p=.claude/skills/terraform-skill && { [ -e $p ] || [ -L $p ] || ln -s ../../.agents/skills/terraform-skill $p; } && { [ "$(readlink $p)" = ../../.agents/skills/terraform-skill ] || echo "ASK: $p exists and differs"; }
 ```

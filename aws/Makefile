@@ -20,9 +20,10 @@ GIT_TLS = env -u GIT_SSL_NO_VERIFY git -c http.sslVerify=true -c http.https://gi
 FORCE_TLS = unset GIT_SSL_NO_VERIFY; n=$${GIT_CONFIG_COUNT:-0}; export GIT_CONFIG_COUNT=$$((n + 2)) "GIT_CONFIG_KEY_$$n=http.sslVerify" "GIT_CONFIG_VALUE_$$n=true" "GIT_CONFIG_KEY_$$((n + 1))=http.https://github.com/.sslVerify" "GIT_CONFIG_VALUE_$$((n + 1))=true";
 
 # Third-party code runs under these targets (pre-commit hooks, tflint and its ruleset, provider binaries, pip, Go, gcc): no cloud, vSphere,
-# GitLab or CI identity variable of those prefixes and none of SYSTEM_ACCESSTOKEN, CI_JOB_TOKEN, CI_JOB_JWT, CI_JOB_JWT_V2, CI_REGISTRY_PASSWORD,
-# TENV_GITHUB_TOKEN, GH_TOKEN, HOMEBREW_GITHUB_API_TOKEN reaches it; GITHUB_TOKEN stays: the terraform_tflint hook runs `tflint --init`, which reads it.
-SCRUB = unset "$${!AWS_@}" "$${!ARM_@}" "$${!AZURE_@}" "$${!AZD_@}" "$${!MSI_@}" "$${!IDENTITY_@}" "$${!ACTIONS_ID_TOKEN_REQUEST_@}" "$${!GOOGLE_@}" "$${!GCLOUD_@}" "$${!GCP_@}" "$${!CLOUDSDK_@}" "$${!VSPHERE_@}" "$${!GOVC_@}" "$${!TF_HTTP_@}" "$${!GITLAB_@}" SYSTEM_ACCESSTOKEN CI_JOB_TOKEN CI_JOB_JWT CI_JOB_JWT_V2 CI_REGISTRY_PASSWORD TENV_GITHUB_TOKEN GH_TOKEN HOMEBREW_GITHUB_API_TOKEN;
+# GitLab or CI identity variable of those prefixes, no TF_VAR_* or TF_ENCRYPTION (they can hold a state-encryption passphrase) and none of SYSTEM_ACCESSTOKEN,
+# CI_JOB_TOKEN, CI_JOB_JWT, CI_JOB_JWT_V2, CI_REGISTRY_PASSWORD, TENV_GITHUB_TOKEN, GH_TOKEN, HOMEBREW_GITHUB_API_TOKEN reaches it;
+# GITHUB_TOKEN stays: the terraform_tflint hook runs `tflint --init`, which reads it.
+SCRUB = unset "$${!AWS_@}" "$${!ARM_@}" "$${!AZURE_@}" "$${!AZD_@}" "$${!MSI_@}" "$${!IDENTITY_@}" "$${!ACTIONS_ID_TOKEN_REQUEST_@}" "$${!GOOGLE_@}" "$${!GCLOUD_@}" "$${!GCP_@}" "$${!CLOUDSDK_@}" "$${!VSPHERE_@}" "$${!GOVC_@}" "$${!TF_HTTP_@}" "$${!TF_VAR_@}" "$${!GITLAB_@}" SYSTEM_ACCESSTOKEN CI_JOB_TOKEN CI_JOB_JWT CI_JOB_JWT_V2 CI_REGISTRY_PASSWORD TF_ENCRYPTION TENV_GITHUB_TOKEN GH_TOKEN HOMEBREW_GITHUB_API_TOKEN;
 INSTALL_HOOKS = $(FORCE_TLS) $(SCRUB) unset GITHUB_TOKEN; pre-commit install-hooks
 
 # Template mode: this folder lies inside a git work tree whose top-level is another directory, so it is the template checkout and not
@@ -123,22 +124,22 @@ generate: ## Create missing stack ids, then regenerate the stack code (run after
 
 relock: ## Upgrade the provider lock files within the version constraints
 	@$(REFUSE)
-	@$(SCRUB) $(CACHE) terramate run --disable-safeguards=git --parallel 1 -- tofu init -backend=false -upgrade -input=false && \
+	@$(SCRUB) $(FORCE_TLS) $(CACHE) terramate run --disable-safeguards=git --parallel 1 -- tofu init -backend=false -upgrade -input=false && \
 	for d in modules/*/; do (cd "$$d" && tofu init -backend=false -upgrade -input=false) || exit 1; done
 
-# Hooks only see tracked files: on an untracked tree every hook skips and pre-commit exits 0.
+# Hooks only see tracked files: an untracked file is skipped and pre-commit still exits 0.
 _tracked:
-	@$(IN_TEMPLATE) || git ls-files --error-unmatch .pre-commit-config.yaml >/dev/null 2>&1 || { echo "nothing is tracked yet: run 'git add -A' first" >&2; exit 1; }
+	@$(IN_TEMPLATE) || { u=$$(git ls-files --others --exclude-standard) && [ -z "$$u" ] || { echo "untracked files are not checked: run 'git add -A' (or gitignore them) first:" >&2; printf '%s\n' "$$u" | sed 5q >&2; exit 1; }; }
 
 check: _tracked ## Commit-stage hooks on every tracked file
-	@$(SCRUB) $(THROWAWAY); $(CACHE) pre-commit run --all-files
+	@$(SCRUB) $(FORCE_TLS) $(THROWAWAY); $(CACHE) pre-commit run --all-files
 
 # One run: the pre-push stage holds every commit-stage hook too (default_stages in .pre-commit-config.yaml).
 check-all: _tracked ## Commit- and push-stage hooks on every tracked file
-	@$(SCRUB) $(THROWAWAY); $(CACHE) pre-commit run --all-files --hook-stage pre-push
+	@$(SCRUB) $(FORCE_TLS) $(THROWAWAY); $(CACHE) pre-commit run --all-files --hook-stage pre-push
 
 test: _tracked ## tofu test of every module (mock providers, no credentials)
-	@$(SCRUB) $(THROWAWAY); $(CACHE) pre-commit run tofu-test --all-files --hook-stage pre-push
+	@$(SCRUB) $(FORCE_TLS) $(THROWAWAY); $(CACHE) pre-commit run tofu-test --all-files --hook-stage pre-push
 
 e2e: ## Rehearse Bootstrap, Operate and Destroy against floci, a local AWS emulator in Docker (about 3.5 minutes, never reaches AWS)
 	@$(THROWAWAY); $(SHELL) ./e2e.sh

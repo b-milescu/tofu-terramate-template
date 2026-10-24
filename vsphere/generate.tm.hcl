@@ -65,11 +65,13 @@ generate_hcl "_terramate_generated_backend.tf" {
 # vsphere_server and allow_unverified_ssl set here beat VSPHERE_SERVER and VSPHERE_ALLOW_UNVERIFIED_SSL in the environment, and
 # allow_unverified_ssl wins both ways: with vsphere_allow_unverified_ssl = true, exporting VSPHERE_ALLOW_UNVERIFIED_SSL=false does not
 # restore verification. Credentials come from VSPHERE_USER and VSPHERE_PASSWORD only.
+# client_debug = false keeps VSPHERE_CLIENT_DEBUG from writing the SOAP calls and the session cookie to ~/.govmomi/debug.
 generate_hcl "_terramate_generated_provider.tf" {
   content {
     provider "vsphere" {
       vsphere_server       = global.vsphere_server
       allow_unverified_ssl = global.vsphere_allow_unverified_ssl
+      client_debug         = false
     }
   }
 }
@@ -129,7 +131,8 @@ generate_hcl "_terramate_generated_folder.tf" {
   }
 }
 
-# Blocks `tofu destroy` (and `plan -destroy`) of whole stacks in protected environments.
+# Blocks `tofu destroy` (and `plan -destroy`) of whole stacks in protected environments. Every stacks/<environment>/globals.tm.hcl sets
+# protect_destroy (true or false): a missing or misspelt key fails on the condition below.
 generate_hcl "_terramate_generated_destroy_guard.tf" {
   condition = global.protect_destroy
 

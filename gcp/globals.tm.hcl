@@ -1,4 +1,4 @@
-# Project-wide globals. Directories below add to or override them (stacks/<environment>/globals.tm.hcl: project_id).
+# Project-wide globals. Directories below add to or override them (stacks/<environment>/globals.tm.hcl: project_id, and protect_destroy: true adds a destroy guard to every stack of the environment).
 globals {
   # Prefix of the state bucket and KMS key ring, and the project label. The RUNBOOK sets it.
   project                 = "example"
@@ -13,9 +13,6 @@ globals {
   state_bucket       = "${global.project}-tfstate-${global.project_id}-${global.region}"
   state_kms_key_ring = "${global.project}-tfstate"
   state_kms_key      = "tfstate"
-
-  # true adds a destroy guard to every stack of an environment (set in stacks/<environment>/globals.tm.hcl).
-  protect_destroy = false
 }
 
 # Keys and values: lowercase letters, digits, underscores and hyphens (asserted in generate.tm.hcl).
