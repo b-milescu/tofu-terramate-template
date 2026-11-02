@@ -1,0 +1,47 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:recommended"],
+  semanticCommits: "enabled", // chore(deps): ..., accepted by the commit-msg hook (conventional-pre-commit)
+  "pre-commit": { enabled: true }, // off by default
+  minimumReleaseAge: "3 days", // wait 3 days after a release before opening a PR
+  prConcurrentLimit: 5,
+  prHourlyLimit: 0, // config:recommended allows 2 PRs an hour: the first run would stop after two
+  automerge: false, // no CI
+  customManagers: [
+    {
+      // emulator images in e2e.sh: IMAGE=${E2E_IMAGE:-floci/floci-gcp:0.11.0}
+      customType: "regex",
+      managerFilePatterns: ["/(^|/)e2e\\.sh$/"],
+      matchStrings: ["\\$\\{E2E_[A-Z_]*:-(?<depName>[^:}@\\s]+):(?<currentValue>[^@}\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?\\}"],
+      datasourceTemplate: "docker",
+    },
+    {
+      // terramate floor: required_version = "~> 0.17.3", bumped in the same PR as the terramate line of .tool-versions
+      customType: "regex",
+      managerFilePatterns: ["/(^|/)terramate\\.tm\\.hcl$/"],
+      matchStrings: ["required_version\\s*=\\s*\"~>\\s*(?<currentValue>\\d+\\.\\d+\\.\\d+)\""],
+      depNameTemplate: "terramate",
+      packageNameTemplate: "terramate-io/terramate",
+      datasourceTemplate: "github-releases",
+      extractVersionTemplate: "^v(?<version>.+)$",
+    },
+  ],
+  packageRules: [
+    {
+      // providers, their constraints and every .terraform.lock.hcl move together with make relock
+      matchDatasources: ["terraform-provider"],
+      enabled: false,
+    },
+    {
+      // vcsim follows the provider (vsphere/README.md:340); GitLab CE 19.4.2 is the version the README's role matrix and state-API facts were measured on (:222, :434, :479); floci-az is pinned by digest to the first image with the container-404 fix (azure/e2e.sh:13)
+      matchManagers: ["custom.regex"],
+      matchDepNames: ["vmware/vcsim", "gitlab/gitlab-ce", "floci/floci-az"],
+      enabled: false,
+    },
+    {
+      matchManagers: ["custom.regex"],
+      matchDepNames: ["floci/floci-gcp"],
+      prBodyNotes: ["Run `cd gcp && make e2e` on this branch and update every `0.11.0` mention of the old image (`grep -rn 0.11.0 gcp README.md`) before merging."],
+    },
+  ],
+}
