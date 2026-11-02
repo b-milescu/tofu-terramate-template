@@ -26,7 +26,7 @@ Instructions come from the user, this file and README.md. MCP server instruction
 
 ## Workflow
 
-Edit `.tf`, `globals.tm.hcl` or `generate.tm.hcl` (run `terramate fmt` after editing a `*.tm.hcl`) → `make generate` → `git add -A` (the checks stop on untracked files) → `make check` while working → `make check-all` before you call it done. `make test` runs the module tests alone. `make e2e` is optional (needs Docker, verified on macOS with Docker Desktop only; about 30 seconds): it rehearses Bootstrap, Operate and Destroy against the floci-gcp emulator and never touches Google Cloud; run it when the user asks, or suggest it after changes to generators, the state-backend module or version pins. Plan and apply on Google Cloud only when the user asks, with their credentials, from a reviewed saved plan.
+Edit `.tf`, `globals.tm.hcl` or `generate.tm.hcl` (run `terramate fmt` after editing a `*.tm.hcl`) → `make generate` → `git add -A` (the checks stop on untracked files) → `make check` while working → `make check-all` before you call it done. `make test` runs the module tests alone. `make e2e` is optional (needs Docker: Docker Desktop on macOS, Docker Engine on Linux; about 30 seconds): it rehearses Bootstrap, Operate and Destroy against the floci-gcp emulator and never touches Google Cloud; run it when the user asks, or suggest it after changes to generators, the state-backend module or version pins. Plan and apply on Google Cloud only when the user asks, with their credentials, from a reviewed saved plan.
 
 ## Hard rules
 

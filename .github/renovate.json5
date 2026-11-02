@@ -6,7 +6,7 @@
   minimumReleaseAge: "3 days", // wait 3 days after a release before opening a PR
   prConcurrentLimit: 5,
   prHourlyLimit: 0, // config:recommended allows 2 PRs an hour: the first run would stop after two
-  automerge: false, // on only for the packageRules below, once the smoke-test check is green
+  automerge: true, // not production code: every update that Renovate can propose merges once smoke-test (check-all + e2e, all four folders) is green; a red one stays open
   automergeStrategy: "squash", // one conventional "chore(deps): update ..." commit per bump
   customManagers: [
     {
@@ -34,28 +34,10 @@
       enabled: false,
     },
     {
-      // vcsim follows the provider (vsphere/README.md:340); GitLab CE 19.4.2 is the version the README's role matrix and state-API facts were measured on (:222, :434, :479); floci-az is pinned by digest to the first image with the container-404 fix (azure/e2e.sh:13)
+      // the gcp README's emulator-gap sentences and the floci-az / vcsim / GitLab CE notes were measured on the pinned images; a bump merges once e2e is green, the prose is not re-measured
       matchManagers: ["custom.regex"],
-      matchDepNames: ["vmware/vcsim", "gitlab/gitlab-ce", "floci/floci-az"],
-      enabled: false,
-    },
-    {
-      matchManagers: ["custom.regex"],
-      matchDepNames: ["floci/floci-gcp"],
-      prBodyNotes: ["Run `cd gcp && make e2e` on this branch and update every `0.11.0` mention of the old image (`grep -rn 0.11.0 gcp README.md`) before merging."],
-    },
-    {
-      // smoke-test green => merge: hook revisions, tflint rulesets and the asdf pins (opentofu, terramate); majors stay manual
-      matchManagers: ["pre-commit", "asdf", "tflint-plugin"],
-      matchUpdateTypes: ["minor", "patch"],
-      automerge: true,
-    },
-    {
-      // terramate's ~> floor in terramate.tm.hcl shares a branch with the .tool-versions line: both must allow automerge
-      matchManagers: ["custom.regex"],
-      matchDepNames: ["terramate"],
-      matchUpdateTypes: ["minor", "patch"],
-      automerge: true,
+      matchDepNames: ["floci/floci-gcp", "floci/floci-az", "vmware/vcsim", "gitlab/gitlab-ce"],
+      prBodyNotes: ["Merges when `smoke-test` is green. Prose that quotes the old version (`git grep -n <old version>`) is not updated by Renovate."],
     },
   ],
 }

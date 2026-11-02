@@ -83,7 +83,7 @@ make hooks    # the git hooks (pre-commit, pre-push, commit-msg); run it after t
 
 ## Make targets
 
-`make help` lists the targets. `check`, `check-all` and `test` stop with "untracked files are not checked" and list up to five of them while git shows untracked files: `git add -A` them or gitignore them. Hooks only see tracked files: pre-commit skips an untracked one and still exits 0. `make e2e` is not part of `check-all`: it runs on macOS with Docker Desktop only and takes minutes ([End-to-end rehearsal](#end-to-end-rehearsal-make-e2e)).
+`make help` lists the targets. `check`, `check-all` and `test` stop with "untracked files are not checked" and list up to five of them while git shows untracked files: `git add -A` them or gitignore them. Hooks only see tracked files: pre-commit skips an untracked one and still exits 0. `make e2e` is not part of `check-all`: it runs on macOS with Docker Desktop and on Docker Engine on an x86_64 Ubuntu 24.04 GitHub Actions runner (this template repository's `smoke-test` workflow, job `e2e (aws)`, 241 s there) and takes minutes ([End-to-end rehearsal](#end-to-end-rehearsal-make-e2e)).
 
 In the template repository (this folder lies inside another repository's work tree, so it is not a project: a project is its own git repository), `check`, `check-all`, `test` and `e2e` print `template checkout: running <target> in a throwaway project` and run in a copy of the tracked and unignored files in a scratch git repository (`make generate`, then the target), removed on every exit, Ctrl-C included; they need no `git add`. What the hooks rewrote or created in the copy is applied to the checkout as one patch (review `git diff` and `git status`, then rerun); stack ids and generated files never come back, a patch that does not apply is printed on stderr instead, and the exit code is the target's. `generate`, `relock`, `skill` and `hooks` refuse there (`this folder is a template inside <path>`); a project copied into a subfolder of another repository gets the same treatment: `git init` it.
 
@@ -254,7 +254,7 @@ terramate run --no-tags state-backend --reverse -- tofu apply tfplan
 Optional, not part of `check-all`: it replays [Bootstrap](#bootstrap), [Operate](#operate) and Destroy with this project's own files against [floci](https://github.com/floci-io/floci), a free local AWS emulator in Docker. Run it after changing generators, the state-backend module or the version pins, or to try a newer floci image.
 
 ```bash
-make e2e                  # about 3.5 minutes; needs macOS with Docker Desktop, curl, the pinned tofu and terramate (make setup) and the project's git checkout
+make e2e                  # about 3.5 minutes; needs Docker (Docker Desktop on macOS, Docker Engine on Linux), curl, the pinned tofu and terramate (make setup) and the project's git checkout
 E2E_VERBOSE=1 make e2e    # the same, streaming the output of every step
 ```
 
@@ -283,7 +283,7 @@ Knobs, all optional environment variables:
 | `E2E_IMAGE` | `floci/floci:latest` | pin a tag or digest (for example `floci/floci:2.3.0`) when a new image regresses; 2.3.0 is what it ran against |
 | `E2E_VERBOSE` | unset | `1` streams the output of every step live (a full run is about 4700 lines); any other value: only a failing step shows its last 30 lines |
 
-Run on macOS with Docker Desktop only. A new floci image can change the result (`latest` is not pinned).
+Run on macOS with Docker Desktop and on Docker Engine on an x86_64 Ubuntu 24.04 GitHub Actions runner (this template repository's `smoke-test` workflow, job `e2e (aws)`, 241 s there). A new floci image can change the result (`latest` is not pinned).
 
 ## Grow the tree
 
