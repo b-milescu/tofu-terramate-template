@@ -1,0 +1,69 @@
+name: relock-providers
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: relock-providers
+jobs:
+  relock:
+    # Third-party code (Homebrew tools, hooks, providers) runs here with a read-only token.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Toolchain (make setup)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TENV_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          echo /home/linuxbrew/.linuxbrew/bin >> "$GITHUB_PATH"
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          make -C aws setup
+      - name: Re-lock the providers and rewrite the doc lines that quote them
+        run: .github/scripts/relock.sh
+      - id: diff
+        run: |
+          if git diff --quiet; then echo "changed=false" >> "$GITHUB_OUTPUT"; else echo "changed=true" >> "$GITHUB_OUTPUT"; git diff --binary > relock.patch; git diff --stat; fi
+      - if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: relock-patch
+          path: relock.patch
+  pull-request:
+    # Only the patch crosses over: no third-party code runs next to the write token.
+    needs: relock
+    if: needs.relock.outputs.changed == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: chore/relock-providers
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: relock-patch
+      - name: Skip while an earlier relock pull request is still open
+        id: open
+        run: echo "n=$(gh pr list --head "$BRANCH" --state open --json number --jq length)" >> "$GITHUB_OUTPUT"
+      - if: steps.open.outputs.n == '0'
+        name: Branch, pull request, auto-merge, smoke-test
+        run: |
+          git apply relock.patch
+          rm relock.patch
+          git switch -c "$BRANCH"
+          git -c user.name=github-actions[bot] -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -qam "chore(deps): relock the providers within their constraints"
+          git push --force origin "$BRANCH"
+          url=$(gh pr create --base main --head "$BRANCH" --title "chore(deps): relock the providers within their constraints" --body "Weekly \`make relock\` of the four templates (\`.github/scripts/relock.sh\`): lock files and the doc lines that quote the locked provider version. Merges when \`smoke-test\` is green; a pull request opened with the workflow token does not start the \`pull_request\` run, so the check is dispatched on the branch.")
+          gh pr merge "$url" --auto --squash
+          gh workflow run smoke-test.yml --ref "$BRANCH"

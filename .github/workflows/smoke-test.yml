@@ -1,6 +1,7 @@
 name: smoke-test
 on:
   pull_request:
+  workflow_dispatch: # the relock-providers pull request is opened with the workflow token, which starts no pull_request run
   push:
     branches: [main]
 permissions:
