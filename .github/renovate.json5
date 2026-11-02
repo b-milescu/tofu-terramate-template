@@ -6,7 +6,8 @@
   minimumReleaseAge: "3 days", // wait 3 days after a release before opening a PR
   prConcurrentLimit: 5,
   prHourlyLimit: 0, // config:recommended allows 2 PRs an hour: the first run would stop after two
-  automerge: false, // no CI
+  automerge: false, // on only for the packageRules below, once the smoke-test check is green
+  automergeStrategy: "squash", // one conventional "chore(deps): update ..." commit per bump
   customManagers: [
     {
       // emulator images in e2e.sh: IMAGE=${E2E_IMAGE:-floci/floci-gcp:0.11.0}
@@ -42,6 +43,19 @@
       matchManagers: ["custom.regex"],
       matchDepNames: ["floci/floci-gcp"],
       prBodyNotes: ["Run `cd gcp && make e2e` on this branch and update every `0.11.0` mention of the old image (`grep -rn 0.11.0 gcp README.md`) before merging."],
+    },
+    {
+      // smoke-test green => merge: hook revisions, tflint rulesets and the asdf pins (opentofu, terramate); majors stay manual
+      matchManagers: ["pre-commit", "asdf", "tflint-plugin"],
+      matchUpdateTypes: ["minor", "patch"],
+      automerge: true,
+    },
+    {
+      // terramate's ~> floor in terramate.tm.hcl shares a branch with the .tool-versions line: both must allow automerge
+      matchManagers: ["custom.regex"],
+      matchDepNames: ["terramate"],
+      matchUpdateTypes: ["minor", "patch"],
+      automerge: true,
     },
   ],
 }
