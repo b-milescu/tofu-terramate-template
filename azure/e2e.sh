@@ -10,8 +10,8 @@
 # https://<account>.blob.core.windows.net (a hosts entry, and the emulator's CA in SSL_CERT_FILE) and the azurerm provider on macOS
 # ignores SSL_CERT_FILE. The first run downloads the provider for linux into the plugin cache next to the one for macOS.
 set -euo pipefail
-# the first image that answers 404 for a missing blob container (floci-az #523): 0.15.0 and latest answer 200 and azurerm_storage_container
-# fails with "already exists"; move to the first release that has the fix
+# the pin was the first image that answers 404 for a missing blob container (floci-az #523): releases up to 0.15.0 and latest answered 200 and
+# azurerm_storage_container failed with "already exists"; Renovate bumps the tag and the digest together once make check-all and make e2e pass
 IMAGE=${E2E_IMAGE:-floci/floci-az:nightly-10232026@sha256:e97e84516a74a5c4256783b08734bb8df8bbc88268dd784c2253033195ceb398}
 V=${E2E_VERBOSE:-} # 1: also stream every step's output live (it is logged either way); any other value: off
 

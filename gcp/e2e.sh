@@ -64,7 +64,7 @@ git ls-files -z --cached --others --exclude-standard | while IFS= read -r -d '' 
   tar --null -T - -cf - | tar -xf - -C "$tmp/p"
 cd "$tmp/p"
 git init -q -b main . && git add -A && git -c user.name=e2e -c user.email=e2e@e2e.invalid commit -q -m e2e
-# gitignored *_override.tf files, written into the copy after the commit. 1) In the module, what floci-gcp 0.11.0 does not emulate: IAM
+# gitignored *_override.tf files, written into the copy after the commit. 1) In the module, what floci-gcp 0.11.0 did not emulate when this was written: IAM
 # policies on keys, the key's rotation period and labels (the provider's default_labels included) and the bucket's default key. The
 # lifecycle blocks merge with the module's prevent_destroy, so the destroy refusals below still hold. What this rehearsal cannot show
 # for that reason: the service agent's grant on the key, the key as the bucket's default key, the rotation.

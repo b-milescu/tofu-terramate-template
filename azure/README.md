@@ -296,7 +296,7 @@ terramate run --no-tags state-backend --reverse -- tofu apply tfplan
 
 ## End-to-end rehearsal (`make e2e`)
 
-Optional, not part of `check-all`: it replays [Bootstrap](#bootstrap), [Operate](#operate) and Destroy with this project's own files against [floci-az](https://github.com/floci-io/floci-az), a free local Azure emulator in Docker. Run it after changing generators, the state-backend module or the version pins, or to try a newer floci-az image.
+Optional, not part of `check-all`: it replays [Bootstrap](#bootstrap), [Operate](#operate) and Destroy with this project's own files against [floci-az](https://github.com/floci-io/floci-az), a free local Azure emulator in Docker. Run it after changing generators, the state-backend module or the version pins, or to try a newer floci-az image. The numbers and observations quoted here for older images are history; the pinned image moves with Renovate once `make check-all` and `make e2e` pass, and only what `make e2e` checks is re-verified on a bump.
 
 ```bash
 make e2e                  # about 6 minutes; needs Docker (Docker Desktop on macOS, Docker Engine on Linux), curl, git, the pinned terramate (make setup) and the project's git checkout; OpenTofu itself runs in a container
@@ -321,7 +321,7 @@ It cannot reach Azure: the environment is scrubbed (no `AWS_*`, `ARM_*`, `AZURE_
 
 | It shows | It cannot show |
 |---|---|
-| OpenTofu 1.13.1, azurerm 5.11.0 and Terramate accept the generated backend, provider, versions and locals blocks and the module call: Bootstrap with local state and the migration into the container the stack itself created, the state blob under `stacks/<stack id>/tofu.tfstate` | the Entra ID path, of the backend and of the provider: the run uses an `ARM_ACCESS_KEY` (the backend checks it before Entra ID: read in OpenTofu 1.13.1) and a fake client secret, so `use_azuread_auth = true` is parsed and never exercised |
+| The pinned OpenTofu, azurerm and Terramate accept the generated backend, provider, versions and locals blocks and the module call: Bootstrap with local state and the migration into the container the stack itself created, the state blob under `stacks/<stack id>/tofu.tfstate` | the Entra ID path, of the backend and of the provider: the run uses an `ARM_ACCESS_KEY` (the backend checks it before Entra ID: read in OpenTofu 1.13.1) and a fake client secret, so `use_azuread_auth = true` is parsed and never exercised |
 | resource group, storage account, container, virtual network, network security group, two subnets (`default_outbound_access_enabled = false`) and the associations apply, a second plan is clean, and saved-plan `terramate run` and the reverse destroy of an unprotected environment work under Terramate's safeguards | RBAC: no role assignment exists, no data-plane authorization, no 403, no propagation delay; whether Storage Blob Data Contributor at the resource group is enough for `init`, locking and writing is untested |
 | the state lock is a blob lease: a second operation is refused and the lock released | the CanNotDelete lock and its blocking of deletes, the lifecycle policy, blob versioning and soft delete (the emulator stores no blob properties) |
 | the destroy guard and `prevent_destroy` really fail under this OpenTofu | the account's hardening (GRS, TLS 1.2, HTTPS only, shared keys and local users off, OAuth by default, infrastructure encryption, public network access): offline only, in the module tests, trivy and checkov |
@@ -331,12 +331,12 @@ Knobs, all optional environment variables:
 
 | Variable | Default | Use |
 |---|---|---|
-| `E2E_IMAGE` | `floci/floci-az:nightly-10232026@sha256:e97e84516a74a5c4256783b08734bb8df8bbc88268dd784c2253033195ceb398` | pin another tag or digest. A dated nightly, because floci-az 0.15.0 (the newest release, and `latest`, when this was written) answers 200 for a blob container that does not exist, and `azurerm_storage_container` then fails with `already exists` (observed); floci-az #523 fixes it and nightly-10232026 is the first image that has it: move to the first release that carries the fix after a re-run |
+| `E2E_IMAGE` | `floci/floci-az:nightly-10232026@sha256:e97e84516a74a5c4256783b08734bb8df8bbc88268dd784c2253033195ceb398` | pin another tag or digest. A dated nightly, because floci-az 0.15.0 (the newest release, and `latest`, when this was written) answered 200 for a blob container that does not exist, and `azurerm_storage_container` then failed with `already exists` (observed); floci-az #523 fixes it and nightly-10232026 was the first image that had it. Renovate bumps the tag and the digest together; the pin may later move to a release that carries the fix |
 | `E2E_VERBOSE` | unset | `1` streams the output of every step live; any other value: only a failing step shows its last 30 lines |
 | `TF_PLUGIN_CACHE_DIR` | `~/.terraform.d/plugin-cache` | the provider cache that the OpenTofu container mounts; read before the scrub, and it receives the linux build of the provider |
 | `TMPDIR` | the system default | where the scratch copy lives |
 
-Runs on macOS with Docker Desktop and on Docker Engine on an x86_64 Ubuntu 24.04 GitHub Actions runner (this template repository's `smoke-test` workflow, job `e2e (azure)`, 353 s there, images pulled); that run covers sharing a container's network namespace on a Linux host. arm64 Linux, WSL2 and Intel macOS were not run. A new image can change the result: the emulator default is pinned by digest, never `latest`, and the OpenTofu image follows `.tool-versions`. The price is a dated nightly until a floci-az release carries #523, and two images (about 270 MB) to pull.
+Runs on macOS with Docker Desktop and on Docker Engine on an x86_64 Ubuntu 24.04 GitHub Actions runner (this template repository's `smoke-test` workflow, job `e2e (azure)`, 353 s there, images pulled); that run covers sharing a container's network namespace on a Linux host. arm64 Linux, WSL2 and Intel macOS were not run. A new image can change the result: the emulator default is pinned by digest, never `latest`, and the OpenTofu image follows `.tool-versions`. The pin is a dated nightly because the releases up to 0.15.0 lacked the #523 fix, and two images (about 270 MB) have to be pulled.
 
 ## Grow the tree
 

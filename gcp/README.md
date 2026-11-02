@@ -289,7 +289,7 @@ It cannot reach Google Cloud: the environment is scrubbed (no `AWS_*`, `ARM_*`, 
 Two kinds of gitignored override files exist in the copy only (the `*_override.tf` ignore rule keeps them away from git and Terramate's safeguards):
 
 - `e2e_override.tf` in every stack sets `poll_interval = "100ms"` (the provider polls Compute operations every 10 s otherwise: a run without it took 81 s instead of about 20 s) and a `universe_domain` other than googleapis.com. The latter stops the provider's own hard-coded call to `openidconnect.googleapis.com`, so nothing at all is sent towards Google, and turns every service without an endpoint variable into `https://<service>.e2e.invalid`.
-- `modules/state-backend/e2e_override.tf` leaves out what floci-gcp 0.11.0 does not emulate: the KMS IAM grant (`count = 0`, otherwise the apply fails with `CryptoKey not found` at `getIamPolicy`), and `ignore_changes` for the key's rotation period and labels and for the bucket's default key (each override was removed once and broke the run). Its `lifecycle` blocks merge with the module's `prevent_destroy`, so the destroy refusals above still hold; the state-backend plans print a harmless `Redundant ignore_changes element` warning for two label attributes. The overrides become redundant, not wrong, when floci-gcp closes those gaps.
+- `modules/state-backend/e2e_override.tf` leaves out what floci-gcp 0.11.0 did not emulate when the override was written (the override stays even if a newer image emulates more): the KMS IAM grant (`count = 0`, otherwise the apply fails with `CryptoKey not found` at `getIamPolicy`), and `ignore_changes` for the key's rotation period and labels and for the bucket's default key (each override was removed once and broke the run). Its `lifecycle` blocks merge with the module's `prevent_destroy`, so the destroy refusals above still hold; the state-backend plans print a harmless `Redundant ignore_changes element` warning for two label attributes. The overrides become redundant, not wrong, when floci-gcp closes those gaps.
 
 | It shows | It cannot show |
 |---|---|
@@ -298,11 +298,13 @@ Two kinds of gitignored override files exist in the copy only (the `*_override.t
 | state locking is a conditional write: a held lock refuses a second plan (`conditionNotMet`) and `force-unlock` by the lock's generation frees it | lock-object semantics of the real service beyond that message; real region availability, global bucket-name uniqueness, provider wait times (`poll_interval = "100ms"`), cost; a foreign project is not refused (no setting could refuse it) |
 | the destroy guard and the `prevent_destroy` of the bucket, the key and the key ring really fail under this OpenTofu | real Google Cloud: nothing here replaces a first apply in a sandbox project |
 
+The numbers and observations quoted for older images are history; the pinned image moves with Renovate once `make check-all` and `make e2e` pass, and only what `make e2e` checks is re-verified on a bump.
+
 Knobs, all optional environment variables:
 
 | Variable | Default | Use |
 |---|---|---|
-| `E2E_IMAGE` | `floci/floci-gcp:0.11.0` | pin another tag or digest; 0.11.0 is what it ran against (the `latest` tag had the same digest on 2026-10-23, and the `nightly` image of that day passed too; 0.10.0 is the first release with Compute support; floci-gcp publishes stable releases on the 15th and the last day of each month) |
+| `E2E_IMAGE` | `floci/floci-gcp:0.11.0` | pin another tag or digest; it ran against 0.11.0 when measured (the `latest` tag had the same digest on 2026-10-23, and the `nightly` image of that day passed too; 0.10.0 is the first release with Compute support; floci-gcp publishes stable releases on the 15th and the last day of each month) |
 | `E2E_VERBOSE` | unset | `1` streams the output of every step live (a full run is about 1,300 lines); any other value: only a failing step shows its last 30 lines |
 
 It runs on macOS with Docker Desktop (Apple Silicon, Docker 29.9.2) and on Docker Engine on an x86_64 Ubuntu 24.04 GitHub Actions runner (this template repository's `smoke-test` workflow, job `e2e (gcp)`, 32 s there). A run with an empty plugin cache (the 123 MB provider downloaded once) took 28 s; the time of the first image pull was not measured. A new image can change the result: the default is a pinned tag, not `latest`.
