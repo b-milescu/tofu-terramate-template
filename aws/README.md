@@ -1,4 +1,4 @@
-# OpenTofu + Terramate on AWS
+# OpenTofu + Terramate on AWS 
 
 [OpenTofu](https://opentofu.org) for the code, [Terramate](https://terramate.io) for stacks, code generation and run order, [pre-commit](https://pre-commit.com) as the only check runner. `make help` lists the local entry points; coding agents read [AGENTS.md](AGENTS.md).
 
