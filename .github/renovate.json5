@@ -39,5 +39,11 @@
       matchDepNames: ["floci/floci-gcp", "floci/floci-az", "vmware/vcsim", "gitlab/gitlab-ce"],
       prBodyNotes: ["Merges when `smoke-test` is green. Prose that quotes the old version (`git grep -n <old version>`) is not updated by Renovate."],
     },
+    {
+      // floci-az is a dated nightly (nightly-MMDDYYYY) pinned with its digest: order the tags by year, month, day so the tag and digest move together
+      matchManagers: ["custom.regex"],
+      matchDepNames: ["floci/floci-az"],
+      versioning: "regex:^nightly-(?<minor>\\d{2})(?<patch>\\d{2})(?<major>\\d{4})$",
+    },
   ],
 }
