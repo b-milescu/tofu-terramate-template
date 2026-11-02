@@ -1,0 +1,56 @@
+name: smoke-test
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: smoke-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  check-all:
+    name: check-all (${{ matrix.folder }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: [aws, vsphere, gcp, azure]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the gitleaks-history hook scans every commit
+          persist-credentials: false
+      - name: Toolchain (make setup)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TENV_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          echo /home/linuxbrew/.linuxbrew/bin >> "$GITHUB_PATH"
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          make -C ${{ matrix.folder }} setup
+      - name: make check-all (both hook stages)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: make -C ${{ matrix.folder }} check-all
+      - name: No hook rewrote or created a file
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+  scrub-lists:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Credential scrub lists agree across the folders
+        run: |
+          n=$(for p in aws vsphere gcp azure; do { sed -n '/^# Third-party code runs/,/^SCRUB = /p' $p/Makefile; grep 'unset "${!AWS_@}"' $p/.pre-commit-config.yaml; grep 'case $v in AWS_' $p/e2e.sh; } | cksum; done | sort -u | wc -l)
+          [ "$n" -eq 1 ]
+  smoke-test:
+    needs: [check-all, scrub-lists]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - run: '[ "${{ needs.check-all.result }}" = success ] && [ "${{ needs.scrub-lists.result }}" = success ]'
