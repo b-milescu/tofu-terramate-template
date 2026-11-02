@@ -37,6 +37,28 @@ jobs:
         run: |
           git diff --exit-code
           test -z "$(git status --porcelain)"
+  e2e:
+    name: e2e (${{ matrix.folder }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: [aws, vsphere, gcp, azure]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Toolchain (make setup)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TENV_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          echo /home/linuxbrew/.linuxbrew/bin >> "$GITHUB_PATH"
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          make -C ${{ matrix.folder }} setup
+      - name: make e2e (emulators in Docker, never reaches a cloud)
+        run: make -C ${{ matrix.folder }} e2e
   scrub-lists:
     runs-on: ubuntu-24.04
     steps:
@@ -48,8 +70,8 @@ jobs:
           n=$(for p in aws vsphere gcp azure; do { sed -n '/^# Third-party code runs/,/^SCRUB = /p' $p/Makefile; grep 'unset "${!AWS_@}"' $p/.pre-commit-config.yaml; grep 'case $v in AWS_' $p/e2e.sh; } | cksum; done | sort -u | wc -l)
           [ "$n" -eq 1 ]
   smoke-test:
-    needs: [check-all, scrub-lists]
+    needs: [check-all, e2e, scrub-lists]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     steps:
-      - run: '[ "${{ needs.check-all.result }}" = success ] && [ "${{ needs.scrub-lists.result }}" = success ]'
+      - run: '[ "${{ needs.check-all.result }}" = success ] && [ "${{ needs.e2e.result }}" = success ] && [ "${{ needs.scrub-lists.result }}" = success ]'
