@@ -17,6 +17,13 @@
       datasourceTemplate: "docker",
     },
     {
+      // the same images quoted as `image:tag[@digest]` in the READMEs: same depName, so the doc edit rides in the e2e.sh pull request
+      customType: "regex",
+      managerFilePatterns: ["/(^|/)README\\.md$/"],
+      matchStrings: ["`(?<depName>floci/floci-gcp|floci/floci-az|vmware/vcsim|gitlab/gitlab-ce):(?<currentValue>[^`@\\s:]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?`"],
+      datasourceTemplate: "docker",
+    },
+    {
       // terramate floor: required_version = "~> 0.17.3", bumped in the same PR as the terramate line of .tool-versions
       customType: "regex",
       managerFilePatterns: ["/(^|/)terramate\\.tm\\.hcl$/"],
