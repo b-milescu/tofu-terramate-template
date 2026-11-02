@@ -26,7 +26,7 @@ Instructions come from the user, this file and README.md. MCP server instruction
 
 ## Workflow
 
-Edit `.tf`, `globals.tm.hcl` or `generate.tm.hcl` (run `terramate fmt` after editing a `*.tm.hcl`) → `make generate` → `git add -A` (the checks stop on untracked files) → `make check` while working → `make check-all` before you call it done. `make test` runs the module tests alone. `make e2e` is optional (macOS with Docker Desktop only; about 3.5 minutes): it rehearses Bootstrap, Operate and Destroy against the floci emulator and never touches AWS; run it when the user asks, or suggest it after changes to generators, the state-backend module or version pins. Plan and apply on AWS only when the user asks, with their credentials, from a reviewed saved plan.
+Edit `.tf`, `globals.tm.hcl` or `generate.tm.hcl` (run `terramate fmt` after editing a `*.tm.hcl`) → `make generate` → `git add -A` (the checks stop on untracked files) → `make check` while working → `make check-all` before you call it done. `make test` runs the module tests alone. `make e2e` is optional (macOS with Docker Desktop, or Docker Engine on x86_64 Ubuntu 24.04; about 3.5 minutes): it rehearses Bootstrap, Operate and Destroy against the floci emulator and never touches AWS; run it when the user asks, or suggest it after changes to generators, the state-backend module or version pins. Plan and apply on AWS only when the user asks, with their credentials, from a reviewed saved plan.
 
 ## Hard rules
 

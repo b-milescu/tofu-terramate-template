@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Rehearses the README's Bootstrap, Operate and Destroy against floci (https://github.com/floci-io/floci), a local AWS emulator
-# in Docker: `make e2e` (in a template checkout make runs it in a throwaway project). Needs macOS with Docker Desktop, tofu, terramate (make setup),
+# in Docker: `make e2e` (in a template checkout make runs it in a throwaway project). Needs Docker (Docker Desktop on macOS, Docker Engine on Linux), tofu, terramate (make setup),
 # curl, and network for the registry and GitHub, never for AWS. E2E_VERBOSE=1 also streams every step's output live.
 # It runs on a throwaway copy of the project and cannot reach AWS: scrubbed environment, fake credentials only (the account id
 # as access key id), AWS_ENDPOINT_URL as the only redirect (loopback, random port, preflighted), a dead proxy for every other
@@ -53,7 +53,7 @@ port=$(docker port "$name" 4566/tcp | sed -n '1s/.*://p')
 export AWS_ENDPOINT_URL=http://localhost:$port # the only redirect; preflight: floci's S3 Control route answers at <account id>.localhost (macOS resolves it to loopback)
 probe() { grep -q awss3control <<<"$(curl -q -sS -m 3 "http://$OTHER.localhost:$port/v20180820/tags/arn%3Aaws%3As3%3A%3A%3Ae2e" 2>/dev/null || true)"; }
 for _ in $(seq 60); do probe && break; sleep 0.5; done
-probe || die "floci does not answer at $OTHER.localhost:$port (e2e runs on macOS with Docker Desktop only)"
+probe || die "floci does not answer at $OTHER.localhost:$port (e2e runs on macOS with Docker Desktop and on Docker Engine on x86_64 Ubuntu 24.04)"
 
 # throwaway project: tracked and unignored files in a scratch git repo (Terramate needs a clean git root)
 mkdir "$tmp/p"

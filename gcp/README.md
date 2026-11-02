@@ -85,7 +85,7 @@ make hooks    # the git hooks (pre-commit, pre-push, commit-msg); run it after t
 
 ## Make targets
 
-`make help` lists the targets. `check`, `check-all` and `test` stop with "untracked files are not checked" and list up to five of them while git shows untracked files: `git add -A` them or gitignore them. Hooks only see tracked files: pre-commit skips an untracked one and still exits 0. `make e2e` is not part of `check-all`: it needs Docker (verified with Docker Desktop on macOS only) and takes about 30 seconds ([End-to-end rehearsal](#end-to-end-rehearsal-make-e2e)).
+`make help` lists the targets. `check`, `check-all` and `test` stop with "untracked files are not checked" and list up to five of them while git shows untracked files: `git add -A` them or gitignore them. Hooks only see tracked files: pre-commit skips an untracked one and still exits 0. `make e2e` is not part of `check-all`: it needs Docker (Docker Desktop on macOS, Docker Engine on Linux; see the verified hosts below) and takes about 30 seconds ([End-to-end rehearsal](#end-to-end-rehearsal-make-e2e)).
 
 In the template repository (this folder lies inside another repository's work tree, so it is not a project: a project is its own git repository), `check`, `check-all`, `test` and `e2e` print `template checkout: running <target> in a throwaway project` and run in a copy of the tracked and unignored files in a scratch git repository (`make generate`, then the target), removed on every exit, Ctrl-C included; they need no `git add`. What the hooks rewrote or created in the copy is applied to the checkout as one patch (review `git diff` and `git status`, then rerun); stack ids and generated files never come back, a patch that does not apply is printed on stderr instead, and the exit code is the target's. `generate`, `relock`, `skill` and `hooks` refuse there (`this folder is a template inside <path>`); a project copied into a subfolder of another repository gets the same treatment: `git init` it.
 
@@ -271,7 +271,7 @@ terramate run --no-tags state-backend --reverse -- tofu apply tfplan
 Optional, not part of `check-all`: it replays [Bootstrap](#bootstrap), [Operate](#operate) and Destroy with this project's own files against [floci-gcp](https://github.com/floci-io/floci-gcp), a free local Google Cloud emulator in Docker. Run it after changing generators, the state-backend module or the version pins, or to try a newer floci-gcp image.
 
 ```bash
-make e2e                  # about 30 seconds (20 to 27 s measured with the image and the provider cached); needs Docker (Docker Desktop on macOS is the only host verified), curl, the pinned tofu and terramate (make setup) and the project's git checkout
+make e2e                  # about 30 seconds (20 to 27 s measured with the image and the provider cached); needs Docker (Docker Desktop on macOS, Docker Engine on Linux), curl, the pinned tofu and terramate (make setup) and the project's git checkout
 E2E_VERBOSE=1 make e2e    # the same, streaming the output of every step
 ```
 
@@ -305,7 +305,7 @@ Knobs, all optional environment variables:
 | `E2E_IMAGE` | `floci/floci-gcp:0.11.0` | pin another tag or digest; 0.11.0 is what it ran against (the `latest` tag had the same digest on 2026-10-23, and the `nightly` image of that day passed too; 0.10.0 is the first release with Compute support; floci-gcp publishes stable releases on the 15th and the last day of each month) |
 | `E2E_VERBOSE` | unset | `1` streams the output of every step live (a full run is about 1,300 lines); any other value: only a failing step shows its last 30 lines |
 
-Run it with Docker Desktop on macOS: the only host it was verified on (Apple Silicon, Docker 29.9.2). Docker Engine on Linux is expected to work, since nothing in the script is macOS-specific (loopback addresses only, a multi-arch image), but it was not run. A run with an empty plugin cache (the 123 MB provider downloaded once) took 28 s; the time of the first image pull was not measured. A new image can change the result: the default is a pinned tag, not `latest`.
+It runs on macOS with Docker Desktop (Apple Silicon, Docker 29.9.2) and on Docker Engine on an x86_64 Ubuntu 24.04 GitHub Actions runner (this template repository's `smoke-test` workflow, job `e2e (gcp)`, 32 s there). A run with an empty plugin cache (the 123 MB provider downloaded once) took 28 s; the time of the first image pull was not measured. A new image can change the result: the default is a pinned tag, not `latest`.
 
 ## Grow the tree
 

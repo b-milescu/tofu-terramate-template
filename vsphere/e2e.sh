@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rehearses the README's Operate and Destroy against vcsim (https://github.com/vmware/govmomi/tree/main/vcsim), the vCenter simulator,
 # and a GitLab CE server for the managed state, both in Docker: `make e2e` (in a template checkout make runs it in a throwaway project).
-# Needs macOS with Docker Desktop (the only host it was verified on; GitLab takes about 3.5 GiB of its memory), tofu and terramate
+# Needs Docker (Docker Desktop on macOS, Docker Engine on Linux; verified on both; GitLab takes about 3.5 GiB of its memory), tofu and terramate
 # (make setup), curl, and network for the OpenTofu registry and GitHub, never for your vCenter or GitLab; the first run also pulls about
 # 1.5 GB of images from Docker Hub.
 # E2E_VERBOSE=1 also streams every step's output live.
@@ -123,7 +123,7 @@ gitlab_ready() { # its readiness check covers the database, Redis and Gitaly
   local end=$((SECONDS + 600))
   while [ "$SECONDS" -lt "$end" ]; do
     curl -q -fsS -m 5 -o /dev/null "http://127.0.0.1:$glport/-/readiness?all=1" 2>/dev/null && return 0
-    [ "$(docker inspect -f '{{.State.Running}}' "$gl" 2>/dev/null)" = true ] || { echo "the GitLab container stopped (Docker Desktop needs about 3.5 GiB of memory for it)"; return 1; }
+    [ "$(docker inspect -f '{{.State.Running}}' "$gl" 2>/dev/null)" = true ] || { echo "the GitLab container stopped (Docker needs about 3.5 GiB of memory for it)"; return 1; }
     sleep 2
   done
   echo "GitLab was not ready after 10 minutes"

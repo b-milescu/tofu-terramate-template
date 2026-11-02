@@ -91,7 +91,7 @@ make hooks    # the git hooks (pre-commit, pre-push, commit-msg); run it after t
 
 ## Make targets
 
-`make help` lists the targets. `check`, `check-all` and `test` stop with "untracked files are not checked" and list up to five of them while git shows untracked files: `git add -A` them or gitignore them. Hooks only see tracked files: pre-commit skips an untracked one and still exits 0. `make e2e` is not part of `check-all`: it runs on macOS with Docker Desktop only and takes minutes ([End-to-end rehearsal](#end-to-end-rehearsal-make-e2e)).
+`make help` lists the targets. `check`, `check-all` and `test` stop with "untracked files are not checked" and list up to five of them while git shows untracked files: `git add -A` them or gitignore them. Hooks only see tracked files: pre-commit skips an untracked one and still exits 0. `make e2e` is not part of `check-all`: it runs on macOS with Docker Desktop and on Docker Engine on an x86_64 Ubuntu 24.04 GitHub Actions runner, and takes minutes ([End-to-end rehearsal](#end-to-end-rehearsal-make-e2e)).
 
 In the template repository (this folder lies inside another repository's work tree, so it is not a project: a project is its own git repository), `check`, `check-all`, `test` and `e2e` print `template checkout: running <target> in a throwaway project` and run in a copy of the tracked and unignored files in a scratch git repository (`make generate`, then the target), removed on every exit, Ctrl-C included; they need no `git add`. What the hooks rewrote or created in the copy is applied to the checkout as one patch (review `git diff` and `git status`, then rerun); stack ids and generated files never come back, a patch that does not apply is printed on stderr instead, and the exit code is the target's. `generate`, `relock`, `skill` and `hooks` refuse there (`this folder is a template inside <path>`); a project copied into a subfolder of another repository gets the same treatment: `git init` it.
 
@@ -299,7 +299,7 @@ terramate run --no-tags state-backend --reverse -- tofu apply tfplan
 Optional, not part of `check-all`: it replays [Bootstrap](#bootstrap), [Operate](#operate) and Destroy with this project's own files against [floci-az](https://github.com/floci-io/floci-az), a free local Azure emulator in Docker. Run it after changing generators, the state-backend module or the version pins, or to try a newer floci-az image.
 
 ```bash
-make e2e                  # about 6 minutes; needs macOS with Docker Desktop, curl, git, the pinned terramate (make setup) and the project's git checkout; OpenTofu itself runs in a container
+make e2e                  # about 6 minutes; needs Docker (Docker Desktop on macOS, Docker Engine on Linux), curl, git, the pinned terramate (make setup) and the project's git checkout; OpenTofu itself runs in a container
 E2E_VERBOSE=1 make e2e    # the same, streaming the output of every step
 ```
 
@@ -336,7 +336,7 @@ Knobs, all optional environment variables:
 | `TF_PLUGIN_CACHE_DIR` | `~/.terraform.d/plugin-cache` | the provider cache that the OpenTofu container mounts; read before the scrub, and it receives the linux build of the provider |
 | `TMPDIR` | the system default | where the scratch copy lives |
 
-Run on macOS with Docker Desktop only: it is the only host this was verified on (sharing a container's network namespace on a Linux host is untested). A new image can change the result: the emulator default is pinned by digest, never `latest`, and the OpenTofu image follows `.tool-versions`. The price is a dated nightly until a floci-az release carries #523, and two images (about 270 MB) to pull.
+Runs on macOS with Docker Desktop and on Docker Engine on an x86_64 Ubuntu 24.04 GitHub Actions runner (this template repository's `smoke-test` workflow, job `e2e (azure)`, 353 s there, images pulled); that run covers sharing a container's network namespace on a Linux host. arm64 Linux, WSL2 and Intel macOS were not run. A new image can change the result: the emulator default is pinned by digest, never `latest`, and the OpenTofu image follows `.tool-versions`. The price is a dated nightly until a floci-az release carries #523, and two images (about 270 MB) to pull.
 
 ## Grow the tree
 

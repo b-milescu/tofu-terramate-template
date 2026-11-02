@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Rehearses the README's Bootstrap, Operate and Destroy against floci-az (https://github.com/floci-io/floci-az), a local Azure
-# emulator in Docker: `make e2e` (in a template checkout make runs it in a throwaway project). Needs macOS with Docker Desktop,
+# emulator in Docker: `make e2e` (in a template checkout make runs it in a throwaway project). Needs Docker (Docker Desktop on macOS, Docker Engine on Linux),
 # terramate (make setup), curl, and network for the registry, GitHub and the images, never for Azure. E2E_VERBOSE=1 also streams
 # every step's output live; E2E_IMAGE swaps the emulator image.
 # It runs on a throwaway copy of the project and cannot reach Azure: scrubbed environment, fake credentials only, the emulator's
