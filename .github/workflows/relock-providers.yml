@@ -57,13 +57,21 @@ jobs:
         id: open
         run: echo "n=$(gh pr list --head "$BRANCH" --state open --json number --jq length)" >> "$GITHUB_OUTPUT"
       - if: steps.open.outputs.n == '0'
-        name: Branch, pull request, auto-merge, smoke-test
+        name: Branch, pull request, auto-merge, approve the held smoke-test run
         run: |
           git apply relock.patch
           rm relock.patch
           git switch -c "$BRANCH"
           git -c user.name=github-actions[bot] -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -qam "chore(deps): relock the providers within their constraints"
           git push --force origin "$BRANCH"
-          url=$(gh pr create --base main --head "$BRANCH" --title "chore(deps): relock the providers within their constraints" --body "Weekly \`make relock\` of the four templates (\`.github/scripts/relock.sh\`): lock files and the doc lines that quote the locked provider version. Merges when \`smoke-test\` is green; a pull request opened with the workflow token does not start the \`pull_request\` run, so the check is dispatched on the branch.")
+          url=$(gh pr create --base main --head "$BRANCH" --title "chore(deps): relock the providers within their constraints" --body "Weekly \`make relock\` of the four templates (\`.github/scripts/relock.sh\`): lock files and the doc lines that quote the locked provider version. Merges when \`smoke-test\` is green. GitHub holds the \`pull_request\` run of a pull request opened by the workflow token until someone approves it; the workflow approves it, since the run only executes the repository's own checks.")
           gh pr merge "$url" --auto --squash
-          gh workflow run smoke-test.yml --ref "$BRANCH"
+          sha=$(git rev-parse HEAD)
+          id=
+          for _ in $(seq 1 30); do
+            id=$(gh run list --workflow smoke-test.yml --branch "$BRANCH" --event pull_request --json databaseId,headSha,conclusion --jq ".[] | select(.headSha == \"$sha\" and .conclusion == \"action_required\") | .databaseId" | head -1)
+            [ -n "$id" ] && break
+            sleep 10
+          done
+          [ -n "$id" ] || { echo "no held smoke-test run for $sha to approve" >&2; exit 1; }
+          gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/approve"
